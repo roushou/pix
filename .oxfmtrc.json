@@ -1,0 +1,16 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+
+  // Explicit defaults (matches oxfmt's recommended defaults) so the config is
+  // self-documenting and stable across upgrades.
+  "printWidth": 100,
+  "tabWidth": 2,
+  "useTabs": false,
+  "semi": true,
+  "singleQuote": false,
+  "trailingComma": "all",
+
+  // oxfmt reads .gitignore automatically and skips node_modules by default;
+  // this only adds generated output directories.
+  "ignorePatterns": ["dist", "out", "coverage"]
+}

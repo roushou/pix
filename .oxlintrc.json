@@ -1,0 +1,27 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+
+  // Oxlint ships several plugins as fast Rust ports. Listing them explicitly
+  // overwrites the default set, so include the defaults we want plus `import`
+  // for ESM problem detection (this package is `"type": "module"`).
+  "plugins": ["import", "oxc", "typescript", "unicorn"],
+
+  "categories": {
+    // Code that is outright wrong or useless.
+    "correctness": "error",
+    // Code that is most likely wrong or useless.
+    "suspicious": "warn",
+    // Rules that aim to improve runtime performance.
+    "perf": "warn"
+    // `style` and `pedantic` are intentionally left off: style is handled by
+    // oxfmt, and pedantic rules have occasional false positives.
+  },
+
+  "env": {
+    // Extensions run inside the pi runtime (Node/Bun) and use `process`, etc.
+    "node": true
+  },
+
+  // Paths that are generated or vendored. `node_modules` is ignored by default.
+  "ignorePatterns": ["dist", "out", "coverage"]
+}
