@@ -44,6 +44,7 @@ Then `/reload` (or restart pi). Uninstall with `pi remove <source>`.
 
 - **`conventional-commits`** — Conventional Commits rules plus a `validate.sh` linter. Auto-loads when committing; force with `/skill:conventional-commits`.
 - **`api-design`** — API design principles + review checklist (REST, function signatures, schemas). Auto-loads when designing or reviewing interfaces.
+- **`git-rebase`** — interactive rebase workflow (squash/reword/reorder/drop) for a clean, Conventional Commits-compliant history.
 
 ### Prompts (`prompts/`)
 
