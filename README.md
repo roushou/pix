@@ -32,6 +32,7 @@ Then `/reload` (or restart pi). Uninstall with `pi remove <source>`.
 | `session-name`    | Auto-names sessions from their first user message (stopword-aware). `/rename [name]` to override.                                                                      |
 | `plan-mode`       | Read-only exploration + plan/execute: `/plan` (or `Ctrl+Alt+P`) disables write tools and restricts bash; parses `Plan:` steps, tracks `[DONE:n]` progress in a widget. |
 | `handoff`         | `/handoff <goal>` distills the current branch into a self-contained prompt, lets you edit it, and opens a new session pre-filled with it.                              |
+| `bookmark`        | `/bookmark [label]` / `/unbookmark` label session entries for `/tree` navigation.                                                                                      |
 
 ### Skills (`skills/`)
 
