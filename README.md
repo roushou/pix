@@ -51,6 +51,10 @@ Then `/reload` (or restart pi). Uninstall with `pi remove <source>`.
 - **`/refactor`** — refactor while preserving behavior, in small test-green steps.
 - **`/security`** — security audit of the current changes.
 
+### Themes (`themes/`)
+
+- **`kanagawa-wave`** — the [Kanagawa](https://github.com/rebelot/kanagawa.nvim) Wave palette. Select via `/settings` → Theme.
+
 ## Development
 
 ```bash
