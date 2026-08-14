@@ -24,7 +24,7 @@ Then `/reload` (or restart pi). Uninstall with `pi remove <source>`.
 
 | Extension           | What it does                                                                                                                                                           |
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `notify`            | Desktop notification (macOS + Linux) when the agent finishes a task, with outcome, duration, files changed, and cost. Optional `notifyOnStart` config.                  |
+| `notify`            | Desktop notification (macOS + Linux) when the agent finishes a task, with outcome, duration, files changed, and cost. Optional `notifyOnStart` config.                 |
 | `footer`            | Custom TUI footer: model + thinking level, context-usage bar, token/cost totals, git branch, and a dirty indicator (⚑).                                                |
 | `permission-gate`   | Blocks catastrophic bash (`rm -rf /`, `mkfs`) and confirms risky commands (`sudo`, force push, `rm -rf`, `git reset --hard`, …). Fails closed in non-interactive mode. |
 | `protected-paths`   | Blocks `write`/`edit` to sensitive paths (`.env`, `*.key`, `node_modules/`, `.git/`, `.ssh/`, …).                                                                      |
@@ -39,6 +39,7 @@ Then `/reload` (or restart pi). Uninstall with `pi remove <source>`.
 | `minimal-mode`      | Compact rendering for built-in tools: collapsed output shows only the call + a one-line summary (e.g. `grep → N matches`); `Ctrl+O` expands.                           |
 | `custom-header`     | Compact startup header with pix branding, pi version, and key shortcuts; `/builtin-header` restores the default.                                                       |
 | `preset`            | Named model/thinking/tools/instructions configs from `presets.json`: `/preset`, `Ctrl+Shift+U`, or `--preset`.                                                         |
+| `charts`            | Native inline `chart` and `diagram` tools (TypeScript, zero deps): Unicode bar/line/scatter/histogram/sparkline plots plus architecture/flow/tree diagrams.            |
 
 ### Skills (`skills/`)
 
@@ -48,6 +49,10 @@ Then `/reload` (or restart pi). Uninstall with `pi remove <source>`.
 - **`testing`** — TDD red-green-refactor + coverage guidance: happy path, edge cases, boundaries, and error paths.
 - **`debugging`** — systematic bug workflow: reproduce → locate → hypothesize → confirm → fix → verify.
 - **`performance`** — measure-first optimization: profile, fix the bottleneck, re-measure, and guard with benchmarks.
+- **`webapp-testing`** — Playwright browser automation: test local web apps, debug UI behavior, capture screenshots and browser logs.
+- **`skill-creator`** — author, refine, and evaluate skills: create from scratch, improve triggering descriptions, run evals, and package `.skill` files.
+- **`mcp-builder`** — build high-quality MCP servers (Python FastMCP or TypeScript SDK) to expose external APIs/services as tools.
+- **`ascii-art`** — ASCII/Unicode art: text banners, image-to-ASCII, boxes, dividers, and speech bubbles.
 
 ### Prompts (`prompts/`)
 
