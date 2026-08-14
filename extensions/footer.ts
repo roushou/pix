@@ -7,7 +7,7 @@
  *
  * Left  = active model + thinking level (colored by level)
  * Mid   = context usage bar (color escalates near the context window)
- * Right = session token usage + cost + current git branch
+ * Right = session token usage + cost + current git branch (⚑ when dirty)
  *
  * The footer re-renders on model/thinking changes, turn completion, agent
  * settle, and git branch changes. Other extensions' setStatus() texts are
@@ -73,16 +73,35 @@ export default function (pi: ExtensionAPI) {
   let activeTui: TUI | undefined;
   const requestRender = () => activeTui?.requestRender();
 
+  // Working-tree dirty state (undefined = not a git repo or not checked yet).
+  let dirty: boolean | undefined;
+
+  const refreshDirty = async () => {
+    const { stdout, code } = await pi.exec("git", ["status", "--porcelain"]);
+    dirty = code === 0 ? stdout.trim().length > 0 : undefined;
+    requestRender();
+  };
+
   // Re-render the footer when the values it displays change.
   pi.on("model_select", requestRender);
   pi.on("thinking_level_select", requestRender);
-  pi.on("turn_end", requestRender);
-  pi.on("agent_settled", requestRender);
+  pi.on("turn_end", () => {
+    requestRender();
+    void refreshDirty();
+  });
+  pi.on("agent_settled", () => {
+    requestRender();
+    void refreshDirty();
+  });
 
   pi.on("session_start", (_event, ctx) => {
+    void refreshDirty();
     ctx.ui.setFooter((tui, theme, footerData) => {
       activeTui = tui;
-      const unsubscribeBranch = footerData.onBranchChange(() => tui.requestRender());
+      const unsubscribeBranch = footerData.onBranchChange(() => {
+        tui.requestRender();
+        void refreshDirty();
+      });
 
       return {
         dispose() {
@@ -129,7 +148,11 @@ export default function (pi: ExtensionAPI) {
             `↑${fmtCount(input)} ↓${fmtCount(output)} ${fmtCost(cost)}`,
           );
           const branch = footerData.getGitBranch();
-          const right = branch ? `${tokens} ${theme.fg("muted", branch)}` : tokens;
+          let right = tokens;
+          if (branch) {
+            const dirtyMark = dirty ? ` ${theme.fg("warning", "⚑")}` : "";
+            right = `${tokens} ${theme.fg("muted", branch)}${dirtyMark}`;
+          }
 
           // Prefer the full layout; fall back to compact on narrow terminals.
           let l = leftFull;
