@@ -37,6 +37,7 @@ Then `/reload` (or restart pi). Uninstall with `pi remove <source>`.
 | `summarize`         | `/summarize` renders a conversation summary in a scrollable Markdown overlay.                                                                                          |
 | `titlebar-spinner`  | Braille spinner in the terminal title while the agent works; resets to `π - session - dir` when done.                                                                  |
 | `minimal-mode`      | Compact rendering for built-in tools: collapsed output shows only the call + a one-line summary (e.g. `grep → N matches`); `Ctrl+O` expands.                           |
+| `custom-header`     | Compact startup header with pix branding, pi version, and key shortcuts; `/builtin-header` restores the default.                                                       |
 
 ### Skills (`skills/`)
 
