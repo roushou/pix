@@ -53,6 +53,7 @@ Then `/reload` (or restart pi). Uninstall with `pi remove <source>`.
 - **`/debug`** — structured bug workflow: reproduce → diagnose → fix → verify.
 - **`/refactor`** — refactor while preserving behavior, in small test-green steps.
 - **`/security`** — security audit of the current changes.
+- **`/docs`** — write or refresh documentation for code.
 
 ### Themes (`themes/`)
 
