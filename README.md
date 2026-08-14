@@ -47,6 +47,7 @@ Then `/reload` (or restart pi). Uninstall with `pi remove <source>`.
 - **`git-rebase`** — interactive rebase workflow (squash/reword/reorder/drop) for a clean, Conventional Commits-compliant history.
 - **`testing`** — TDD red-green-refactor + coverage guidance: happy path, edge cases, boundaries, and error paths.
 - **`debugging`** — systematic bug workflow: reproduce → locate → hypothesize → confirm → fix → verify.
+- **`performance`** — measure-first optimization: profile, fix the bottleneck, re-measure, and guard with benchmarks.
 
 ### Prompts (`prompts/`)
 
