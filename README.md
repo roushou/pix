@@ -22,17 +22,18 @@ Then `/reload` (or restart pi). Uninstall with `pi remove <source>`.
 
 ### Extensions (`extensions/`)
 
-| Extension         | What it does                                                                                                                                                           |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `notify`          | Desktop notification (macOS + Linux) when the agent finishes a task. Also registers `/notify-test`.                                                                    |
-| `footer`          | Custom TUI footer: model + thinking level, context-usage bar, token/cost totals, and git branch.                                                                       |
-| `permission-gate` | Blocks catastrophic bash (`rm -rf /`, `mkfs`) and confirms risky commands (`sudo`, force push, `rm -rf`, `git reset --hard`, …). Fails closed in non-interactive mode. |
-| `protected-paths` | Blocks `write`/`edit` to sensitive paths (`.env`, `*.key`, `node_modules/`, `.git/`, `.ssh/`, …).                                                                      |
-| `todo`            | Persistent todo list: LLM-managed `todo` tool, widget above the editor, `/todos` toggle.                                                                               |
-| `session-name`    | Auto-names sessions from their first user message (stopword-aware). `/rename [name]` to override.                                                                      |
-| `plan-mode`       | Read-only exploration + plan/execute: `/plan` (or `Ctrl+Alt+P`) disables write tools and restricts bash; parses `Plan:` steps, tracks `[DONE:n]` progress in a widget. |
-| `handoff`         | `/handoff <goal>` distills the current branch into a self-contained prompt, lets you edit it, and opens a new session pre-filled with it.                              |
-| `bookmark`        | `/bookmark [label]` / `/unbookmark` label session entries for `/tree` navigation.                                                                                      |
+| Extension           | What it does                                                                                                                                                           |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `notify`            | Desktop notification (macOS + Linux) when the agent finishes a task. Also registers `/notify-test`.                                                                    |
+| `footer`            | Custom TUI footer: model + thinking level, context-usage bar, token/cost totals, and git branch.                                                                       |
+| `permission-gate`   | Blocks catastrophic bash (`rm -rf /`, `mkfs`) and confirms risky commands (`sudo`, force push, `rm -rf`, `git reset --hard`, …). Fails closed in non-interactive mode. |
+| `protected-paths`   | Blocks `write`/`edit` to sensitive paths (`.env`, `*.key`, `node_modules/`, `.git/`, `.ssh/`, …).                                                                      |
+| `todo`              | Persistent todo list: LLM-managed `todo` tool, widget above the editor, `/todos` toggle.                                                                               |
+| `session-name`      | Auto-names sessions from their first user message (stopword-aware). `/rename [name]` to override.                                                                      |
+| `plan-mode`         | Read-only exploration + plan/execute: `/plan` (or `Ctrl+Alt+P`) disables write tools and restricts bash; parses `Plan:` steps, tracks `[DONE:n]` progress in a widget. |
+| `handoff`           | `/handoff <goal>` distills the current branch into a self-contained prompt, lets you edit it, and opens a new session pre-filled with it.                              |
+| `bookmark`          | `/bookmark [label]` / `/unbookmark` label session entries for `/tree` navigation.                                                                                      |
+| `interactive-shell` | Runs interactive commands (`!vim`, `!git rebase -i`, `!htop`, …) with full terminal access via the `!` prefix.                                                         |
 
 ### Skills (`skills/`)
 
