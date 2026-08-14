@@ -39,6 +39,12 @@ Then `/reload` (or restart pi). Uninstall with `pi remove <source>`.
 ### Prompts (`prompts/`)
 
 - **`/commit`** — one-command workflow: stage changes, write a Conventional Commits message, validate it, and commit (local only).
+- **`/review`** — review pending changes for bugs, security issues, error-handling gaps, and missing tests.
+- **`/plan`** — produce a numbered implementation plan under a `Plan:` header (feeds into `plan-mode`).
+- **`/explain`** — explain a file, function, or subsystem: architecture, data flow, and gotchas.
+- **`/debug`** — structured bug workflow: reproduce → diagnose → fix → verify.
+- **`/refactor`** — refactor while preserving behavior, in small test-green steps.
+- **`/security`** — security audit of the current changes.
 
 ## Development
 
