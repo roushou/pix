@@ -35,6 +35,7 @@ Then `/reload` (or restart pi). Uninstall with `pi remove <source>`.
 | `bookmark`          | `/bookmark [label]` / `/unbookmark` label session entries for `/tree` navigation.                                                                                      |
 | `interactive-shell` | Runs interactive commands (`!vim`, `!git rebase -i`, `!htop`, …) with full terminal access via the `!` prefix.                                                         |
 | `summarize`         | `/summarize` renders a conversation summary in a scrollable Markdown overlay.                                                                                          |
+| `titlebar-spinner`  | Braille spinner in the terminal title while the agent works; resets to `π - session - dir` when done.                                                                  |
 
 ### Skills (`skills/`)
 
