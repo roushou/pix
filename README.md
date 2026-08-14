@@ -59,3 +59,7 @@ pi install /path/to/pix
 ```
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org/) — enforced by this repo's own `conventional-commits` skill.
+
+# License
+
+This project is licensed under the [MIT](./LICENSE) license.
