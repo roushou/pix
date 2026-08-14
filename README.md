@@ -30,6 +30,7 @@ Then `/reload` (or restart pi). Uninstall with `pi remove <source>`.
 | `protected-paths` | Blocks `write`/`edit` to sensitive paths (`.env`, `*.key`, `node_modules/`, `.git/`, `.ssh/`, …).                                                                      |
 | `todo`            | Persistent todo list: LLM-managed `todo` tool, widget above the editor, `/todos` toggle.                                                                               |
 | `session-name`    | Auto-names sessions from their first user message (stopword-aware). `/rename [name]` to override.                                                                      |
+| `plan-mode`       | Read-only exploration + plan/execute: `/plan` (or `Ctrl+Alt+P`) disables write tools and restricts bash; parses `Plan:` steps, tracks `[DONE:n]` progress in a widget. |
 
 ### Skills (`skills/`)
 
