@@ -39,6 +39,7 @@ Then `/reload` (or restart pi). Uninstall with `pi remove <source>`.
 ### Skills (`skills/`)
 
 - **`conventional-commits`** — Conventional Commits rules plus a `validate.sh` linter. Auto-loads when committing; force with `/skill:conventional-commits`.
+- **`api-design`** — API design principles + review checklist (REST, function signatures, schemas). Auto-loads when designing or reviewing interfaces.
 
 ### Prompts (`prompts/`)
 
