@@ -54,6 +54,7 @@ Then `/reload` (or restart pi). Uninstall with `pi remove <source>`.
 - **`/refactor`** — refactor while preserving behavior, in small test-green steps.
 - **`/security`** — security audit of the current changes.
 - **`/docs`** — write or refresh documentation for code.
+- **`/pr`** — generate a pull request title and description from the current changes.
 
 ### Themes (`themes/`)
 
