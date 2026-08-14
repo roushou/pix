@@ -38,6 +38,7 @@ Then `/reload` (or restart pi). Uninstall with `pi remove <source>`.
 | `titlebar-spinner`  | Braille spinner in the terminal title while the agent works; resets to `π - session - dir` when done.                                                                  |
 | `minimal-mode`      | Compact rendering for built-in tools: collapsed output shows only the call + a one-line summary (e.g. `grep → N matches`); `Ctrl+O` expands.                           |
 | `custom-header`     | Compact startup header with pix branding, pi version, and key shortcuts; `/builtin-header` restores the default.                                                       |
+| `preset`            | Named model/thinking/tools/instructions configs from `presets.json`: `/preset`, `Ctrl+Shift+U`, or `--preset`.                                                         |
 
 ### Skills (`skills/`)
 
