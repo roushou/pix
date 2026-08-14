@@ -56,6 +56,17 @@ Then `/reload` (or restart pi). Uninstall with `pi remove <source>`.
 
 - **`kanagawa-wave`** — the [Kanagawa](https://github.com/rebelot/kanagawa.nvim) Wave palette. Select via `/settings` → Theme.
 
+### Keybindings (`config/`)
+
+Vim-style keybindings ship as `config/keybindings.vim.json` (pi loads keybindings from `~/.pi/agent/keybindings.json`, not from packages). To use them:
+
+```bash
+cp config/keybindings.vim.json ~/.pi/agent/keybindings.json
+# then /reload
+```
+
+Adds `alt+h/j/k/l` movement, `alt+b`/`alt+w` word jumps, `alt+0`/`alt+$` line start/end, `alt+x` delete char, and `alt+o` new line.
+
 ## Development
 
 ```bash

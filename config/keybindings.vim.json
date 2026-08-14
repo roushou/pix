@@ -1,0 +1,13 @@
+{
+  "tui.editor.cursorUp": ["up", "alt+k"],
+  "tui.editor.cursorDown": ["down", "alt+j"],
+  "tui.editor.cursorLeft": ["left", "alt+h"],
+  "tui.editor.cursorRight": ["right", "alt+l"],
+  "tui.editor.cursorWordLeft": ["alt+left", "alt+b"],
+  "tui.editor.cursorWordRight": ["alt+right", "alt+w"],
+  "tui.editor.cursorLineStart": ["home", "ctrl+a", "alt+0"],
+  "tui.editor.cursorLineEnd": ["end", "ctrl+e", "alt+$"],
+  "tui.editor.deleteCharForward": ["delete", "ctrl+d", "alt+x"],
+  "tui.editor.deleteToLineEnd": ["ctrl+k"],
+  "tui.input.newLine": ["shift+enter", "ctrl+j", "alt+o"]
+}
