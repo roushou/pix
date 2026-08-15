@@ -53,6 +53,7 @@ Then `/reload` (or restart pi). Uninstall with `pi remove <source>`.
 - **`skill-creator`** — author, refine, and evaluate skills: create from scratch, improve triggering descriptions, run evals, and package `.skill` files.
 - **`mcp-builder`** — build high-quality MCP servers (Python FastMCP or TypeScript SDK) to expose external APIs/services as tools.
 - **`ascii-art`** — ASCII/Unicode art: text banners, image-to-ASCII, boxes, dividers, and speech bubbles.
+- **`diagram-maker`** — SVG/HTML and Excalidraw diagrams for concepts, architecture, flows, and whiteboards (from openclaw, MIT).
 
 ### Prompts (`prompts/`)
 
