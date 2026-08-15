@@ -1,0 +1,1717 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gox — Isometric System Map</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗺️</text></svg>"
+    />
+    <style>
+      :root {
+        --bg: #0c0f14;
+        --panel: #12161d;
+        --panel2: #171c25;
+        --line: #232a36;
+        --line2: #2e3746;
+        --ink: #e8edf4;
+        --ink-dim: #9aa6b6;
+        --ink-faint: #6b7788;
+        --accent: #5cc8ff;
+        --amber: #ffc46b;
+        --green: #57d9a3;
+        --pink: #ff7aa8;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+      }
+      body {
+        background:
+          radial-gradient(1200px 600px at 70% -10%, #182132 0%, transparent 60%), var(--bg);
+        color: var(--ink);
+        font-family: var(--mono);
+        font-size: 13px;
+        line-height: 1.5;
+        overflow: hidden;
+      }
+      a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      #app {
+        display: grid;
+        grid-template-columns: 218px 1fr 392px;
+        grid-template-rows: 52px 1fr;
+        height: 100vh;
+        grid-template-areas: "top top top" "rail map panel";
+      }
+
+      /* topbar */
+      #top {
+        grid-area: top;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 0 18px;
+        border-bottom: 1px solid var(--line);
+        background: linear-gradient(180deg, #131822, #0e1219);
+      }
+      #top .logo {
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        font-size: 15px;
+      }
+      #top .logo .m {
+        color: var(--accent);
+      }
+      #stats {
+        display: flex;
+        gap: 14px;
+        margin-left: auto;
+        flex-wrap: wrap;
+      }
+      .stat {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+      }
+      .stat b {
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .stat span {
+        font-size: 10px;
+        color: var(--ink-faint);
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+      }
+
+      /* rail */
+      #rail {
+        grid-area: rail;
+        border-right: 1px solid var(--line);
+        background: var(--panel);
+        overflow-y: auto;
+        padding: 12px 10px;
+      }
+      #rail h2 {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 1.2px;
+        color: var(--ink-faint);
+        margin: 8px 6px 10px;
+      }
+      .group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 8px;
+        border-radius: 7px;
+        cursor: pointer;
+        margin-bottom: 2px;
+        transition: background 0.12s;
+      }
+      .group:hover {
+        background: var(--panel2);
+      }
+      .group.on {
+        background: var(--panel2);
+      }
+      .swatch {
+        width: 10px;
+        height: 10px;
+        border-radius: 3px;
+        flex: none;
+      }
+      .group .gname {
+        color: var(--ink-dim);
+      }
+      .group .gcount {
+        margin-left: auto;
+        color: var(--ink-faint);
+        font-size: 11px;
+      }
+      .group .members {
+        display: none;
+      }
+      .rail-note {
+        margin-top: 14px;
+        padding: 10px;
+        border: 1px dashed var(--line2);
+        border-radius: 8px;
+        color: var(--ink-faint);
+        font-size: 11px;
+      }
+
+      /* map */
+      #map {
+        grid-area: map;
+        position: relative;
+        overflow: hidden;
+        cursor: grab;
+      }
+      #map.drag {
+        cursor: grabbing;
+      }
+      #map svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .block {
+        cursor: pointer;
+      }
+      .block:hover .face-top {
+        filter: brightness(1.12);
+      }
+      .block .face {
+        stroke: rgba(0, 0, 0, 0.35);
+        stroke-width: 0.6;
+      }
+      .edge {
+        fill: none;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .edge.solid {
+        stroke: rgba(140, 170, 200, 0.55);
+        stroke-width: 1.3;
+      }
+      .edge.dashed {
+        stroke: rgba(140, 170, 200, 0.32);
+        stroke-width: 1;
+        stroke-dasharray: 5 5;
+      }
+      .edge.hl {
+        stroke: var(--accent);
+        stroke-width: 2.4;
+      }
+      .track {
+        fill: none;
+        stroke: none;
+      }
+      .dot {
+        pointer-events: auto;
+      }
+      .lbl {
+        fill: var(--ink-dim);
+        font-size: 10.5px;
+        font-weight: 600;
+        pointer-events: none;
+        text-anchor: middle;
+      }
+      .lbl .sub {
+        fill: var(--ink-faint);
+        font-size: 9px;
+        font-weight: 400;
+      }
+      .extlbl {
+        fill: var(--ink-dim);
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .extlbl .sub {
+        fill: var(--ink-faint);
+        font-size: 9.5px;
+        font-weight: 400;
+      }
+      .leader {
+        stroke: rgba(140, 170, 200, 0.4);
+        stroke-width: 1;
+        stroke-dasharray: 4 4;
+        fill: none;
+      }
+      .gridline {
+        stroke: #141b25;
+        stroke-width: 0.6;
+      }
+
+      /* tooltip */
+      #tip {
+        position: absolute;
+        pointer-events: none;
+        background: #0d1117ee;
+        border: 1px solid var(--line2);
+        border-radius: 9px;
+        padding: 10px 12px;
+        max-width: 320px;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+        opacity: 0;
+        transform: translateY(4px);
+        transition: opacity 0.1s;
+        z-index: 50;
+      }
+      #tip .t {
+        font-weight: 700;
+        font-size: 13px;
+      }
+      #tip .tag {
+        display: inline-block;
+        font-size: 9.5px;
+        padding: 1px 6px;
+        border-radius: 4px;
+        margin-left: 6px;
+        vertical-align: 1px;
+        border: 1px solid var(--line2);
+      }
+      #tip .w {
+        color: var(--ink-dim);
+        font-size: 11.5px;
+        margin: 4px 0 6px;
+      }
+      #tip .h {
+        color: var(--ink-faint);
+        font-size: 11px;
+      }
+      #tip .files {
+        color: #7fa6c9;
+        font-size: 10.5px;
+        margin-top: 6px;
+        word-break: break-all;
+      }
+      #tip .talks {
+        color: #7fc9a0;
+        font-size: 10.5px;
+        margin-top: 4px;
+      }
+
+      /* panel */
+      #panel {
+        grid-area: panel;
+        border-left: 1px solid var(--line);
+        background: var(--panel);
+        overflow-y: auto;
+        padding: 16px;
+      }
+      #panel section {
+        margin-bottom: 20px;
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 18px;
+      }
+      #panel h3 {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 1.2px;
+        color: var(--ink-faint);
+        margin: 0 0 10px;
+      }
+      #panel p {
+        color: var(--ink-dim);
+        margin: 6px 0;
+      }
+      #panel p strong {
+        color: var(--ink);
+      }
+      .essay {
+        font-size: 12.5px;
+      }
+      .essay b {
+        color: var(--accent);
+        font-weight: 600;
+      }
+      .keyval {
+        display: flex;
+        justify-content: space-between;
+        padding: 3px 0;
+        border-bottom: 1px dotted var(--line);
+        font-size: 12px;
+      }
+      .keyval .k {
+        color: var(--ink-faint);
+      }
+      .keyval .v {
+        color: var(--ink);
+        font-weight: 600;
+      }
+
+      #selected .sel-head {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      #selected .sel-code {
+        font-size: 20px;
+        font-weight: 800;
+        letter-spacing: 1px;
+      }
+      #selected .sel-name {
+        font-size: 15px;
+        font-weight: 700;
+      }
+      #selected .sel-group {
+        font-size: 10px;
+        color: var(--ink-faint);
+        border: 1px solid var(--line2);
+        padding: 2px 7px;
+        border-radius: 20px;
+      }
+      #selected .sel-what {
+        color: var(--ink-dim);
+        margin-top: 8px;
+      }
+      #selected .sel-how {
+        background: var(--panel2);
+        border-left: 2px solid var(--accent);
+        padding: 8px 10px;
+        border-radius: 0 8px 8px 0;
+        margin-top: 8px;
+        font-size: 12px;
+        color: var(--ink-dim);
+      }
+      #selected .sel-files {
+        margin-top: 8px;
+        font-size: 11px;
+      }
+      #selected .sel-files div {
+        color: #7fa6c9;
+        padding: 1px 0;
+      }
+      #selected .sel-talks {
+        margin-top: 6px;
+        font-size: 11px;
+        color: #7fc9a0;
+      }
+      .hint {
+        font-size: 10.5px;
+        color: var(--ink-faint);
+        font-style: italic;
+      }
+
+      /* legend */
+      .leg {
+        display: grid;
+        grid-template-columns: 20px 1fr;
+        gap: 6px 10px;
+        align-items: center;
+        font-size: 11.5px;
+        color: var(--ink-dim);
+      }
+      .leg .sw {
+        width: 18px;
+        height: 10px;
+        border-radius: 3px;
+      }
+      .leg .edge-sw {
+        height: 0;
+        border-top: 2px solid rgba(140, 170, 200, 0.55);
+        width: 18px;
+      }
+      .leg .edge-sw.dash {
+        border-top: 2px dashed rgba(140, 170, 200, 0.35);
+      }
+      .leg .dot-sw {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 6px var(--accent);
+      }
+
+      /* trace */
+      .trace {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+      }
+      .trace li {
+        display: flex;
+        gap: 10px;
+        padding: 7px 8px;
+        border-radius: 8px;
+        cursor: pointer;
+        margin-bottom: 3px;
+        transition: background 0.12s;
+      }
+      .trace li:hover {
+        background: var(--panel2);
+      }
+      .trace li.on {
+        background: var(--panel2);
+        outline: 1px solid var(--accent);
+      }
+      .trace .n {
+        flex: none;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: #1b2430;
+        color: var(--accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 700;
+      }
+      .trace .s {
+        font-size: 11.5px;
+        color: var(--ink-dim);
+      }
+      .trace .s b {
+        color: var(--ink);
+      }
+      .trace .src {
+        display: block;
+        font-size: 10px;
+        color: var(--ink-faint);
+      }
+
+      /* inside banner */
+      #inside-bar {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 40;
+        display: none;
+        align-items: center;
+        gap: 10px;
+        background: #0d1117f2;
+        border: 1px solid var(--line2);
+        border-radius: 9px;
+        padding: 8px 12px;
+      }
+      #inside-bar button {
+        background: #1b2430;
+        color: var(--ink);
+        border: 1px solid var(--line2);
+        border-radius: 6px;
+        padding: 4px 10px;
+        cursor: pointer;
+        font-family: var(--mono);
+        font-size: 11px;
+      }
+      #inside-bar button:hover {
+        border-color: var(--accent);
+      }
+      #inside-bar .crumb {
+        color: var(--ink-dim);
+        font-size: 12px;
+      }
+
+      ::-webkit-scrollbar {
+        width: 9px;
+        height: 9px;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #242e3c;
+        border-radius: 5px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      @media (max-width: 1100px) {
+        #app {
+          grid-template-columns: 180px 1fr 320px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <header id="top">
+        <div class="logo">GOX<span class="m">·</span>SYSTEM MAP</div>
+        <div id="stats">
+          <div class="stat"><b>18,680</b><span>total LoC</span></div>
+          <div class="stat"><b>79 / 6</b><span>go / luau files</span></div>
+          <div class="stat"><b>20</b><span>actions</span></div>
+          <div class="stat"><b>18</b><span>bridge ops</span></div>
+          <div class="stat"><b>2</b><span>transports</span></div>
+          <div class="stat"><b>deny</b><span>default policy</span></div>
+        </div>
+      </header>
+
+      <nav id="rail">
+        <h2>Structure</h2>
+        <div id="groups"></div>
+        <div class="rail-note">
+          Drag to pan · scroll to zoom · click a block to inspect · click a trace step to locate it.
+          Heights are ∝ lines of code.
+        </div>
+      </nav>
+
+      <div id="map">
+        <div id="inside-bar">
+          <span class="crumb" id="crumb"></span><button id="back">← back</button>
+        </div>
+        <div id="tip"></div>
+      </div>
+
+      <div id="panel">
+        <section>
+          <h3>How to read this map</h3>
+          <p class="essay">
+            Each <b>building</b> is a code subsystem, sized by real lines of code and colored by
+            <b>zone</b>. <b>Solid edges</b> are live control/data paths — hover a moving dot to see
+            the payload that travels. <b>Dashed edges</b> are advisory or external links (client
+            host, CI). <b>Flat slabs</b> are storage with no internal logic. The projection is
+            isometric: near the top = entry surface, center = core domain, far right = the Roblox
+            Studio plugin.
+          </p>
+        </section>
+
+        <section>
+          <h3>Legend</h3>
+          <div class="leg">
+            <div class="edge-sw"></div>
+            <div>Control / data path (animated dots = payload)</div>
+            <div class="edge-sw dash"></div>
+            <div>Advisory / external / CI link</div>
+            <div class="sw" style="background: linear-gradient(135deg, #3d4a5c, #28303e)"></div>
+            <div>Storage slab (in-memory / JSON packs)</div>
+            <div class="dot-sw"></div>
+            <div>Selected / highlighted</div>
+          </div>
+          <div
+            style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px"
+            id="legend-groups"
+          ></div>
+        </section>
+
+        <section id="what">
+          <h3>What it does</h3>
+          <p class="essay" id="overview-what"></p>
+        </section>
+
+        <section id="how">
+          <h3>How it's built</h3>
+          <p class="essay" id="overview-how"></p>
+        </section>
+
+        <section id="selected">
+          <h3>Inspected</h3>
+          <div id="sel-content"><span class="hint">Click any block on the map.</span></div>
+        </section>
+
+        <section id="trace-sec">
+          <h3>One request, end to end</h3>
+          <ol class="trace" id="trace"></ol>
+        </section>
+      </div>
+    </div>
+
+    <script>
+      /* ============================================================ DATA ====
+       * REPLACE EVERYTHING FROM HERE DOWN TO THE "END DATA" MARKER.
+       * The engine below the marker is generic — leave it untouched.
+       * ===================================================================== */
+      const GROUPS = [
+        { id: "surface", name: "Surface", hue: 190, desc: "Entry points & client wrappers" },
+        { id: "interface", name: "Interface", hue: 215, desc: "MCP server surface" },
+        { id: "composition", name: "Composition", hue: 40, desc: "Dependency wiring root" },
+        { id: "engine", name: "Engine", hue: 20, desc: "Execution & workflow runtime" },
+        { id: "actions", name: "Actions", hue: 150, desc: "Atomic operation handlers" },
+        {
+          id: "core",
+          name: "Core Domain",
+          hue: 275,
+          desc: "Pure domain: action, policy, runlog, fault",
+        },
+        { id: "bridge", name: "Bridge", hue: 330, desc: "Go adapter ↔ Luau Studio plugin" },
+        { id: "platform", name: "Platform", hue: 175, desc: "Config, identity, logging" },
+        { id: "storage", name: "Storage", hue: 0, desc: "In-memory store & JSON packs" },
+      ];
+
+      const STRUCTURES = [
+        {
+          id: "cmd",
+          code: "CM",
+          name: "Entrypoint",
+          group: "surface",
+          gx: 0,
+          gy: 0,
+          w: 1.6,
+          d: 1.6,
+          loc: 271,
+          files: ["cmd/gox/main.go"],
+          what: "Binary entry: loads config, assembles the App, runs the MCP serve loop with graceful shutdown.",
+          how: "config.LoadFromEnv → app.New → app.Run with a shutdown-signal context.",
+          talks: ["app", "platform"],
+        },
+
+        {
+          id: "pkgclient",
+          code: "PC",
+          name: "Go Client",
+          group: "surface",
+          gx: 5,
+          gy: 0,
+          w: 1.6,
+          d: 1.6,
+          loc: 816,
+          files: ["pkg/client/client.go"],
+          what: "Typed Go wrapper so any Go program can drive Gox as an MCP client.",
+          how: "JSON-RPC 2.0 over stdio against the MCP server.",
+          talks: ["mcp"],
+        },
+
+        {
+          id: "mcp",
+          code: "MCP",
+          name: "MCP Server",
+          group: "interface",
+          gx: 0,
+          gy: 7,
+          w: 2.2,
+          d: 1.8,
+          loc: 4637,
+          files: [
+            "internal/adapter/mcp/server.go",
+            "workflow_tools.go",
+            "resources.go",
+            "guards.go",
+            "workflow_manager.go",
+          ],
+          what: "Exposes 20 action tools, 5 workflow tools, and 3 run-history resources over stdio JSON-RPC.",
+          how: "modelcontextprotocol/go-sdk Server; registers tools from the action catalog and guards payload size (1 MiB).",
+          talks: ["usecase", "runlog", "actions"],
+          children: [
+            {
+              c: "MCPsrv",
+              n: "Server Core",
+              l: "363 LoC",
+              what: "tools/call dispatch, error→JSON-RPC mapping",
+              gx: 0,
+              gy: 0,
+              w: 1.8,
+              d: 1.6,
+              loc: 363,
+              f: "server.go",
+            },
+            {
+              c: "MCPwf",
+              n: "Workflow Tools",
+              l: "618 LoC",
+              what: "workflow.run/status/cancel/list/logs + config",
+              gx: 4,
+              gy: 0,
+              w: 1.8,
+              d: 1.6,
+              loc: 618,
+              f: "workflow_tools.go, workflow_manager.go",
+            },
+            {
+              c: "MCPres",
+              n: "Resources",
+              l: "134 LoC",
+              what: "gox://status, gox://runs, gox://runs/{id}",
+              gx: 8,
+              gy: 0,
+              w: 1.8,
+              d: 1.6,
+              loc: 134,
+              f: "resources.go",
+            },
+            {
+              c: "MCPgrd",
+              n: "Guards",
+              l: "61 LoC",
+              what: "max-payload check on every call",
+              gx: 12,
+              gy: 0,
+              w: 1.6,
+              d: 1.6,
+              loc: 61,
+              f: "guards.go",
+            },
+          ],
+        },
+
+        {
+          id: "roblox",
+          code: "RB",
+          name: "Roblox",
+          group: "bridge",
+          gx: 7,
+          gy: 7,
+          w: 2.0,
+          d: 1.8,
+          loc: 2624,
+          files: [
+            "internal/adapter/roblox/client.go",
+            "protocol.go",
+            "transport.go",
+            "relay_hub.go",
+            "relay_http_server.go",
+            "relay_transport.go",
+            "tcp_transport.go",
+            "fault_map.go",
+          ],
+          what: "Bridge client + two transports (TCP and relay-http) speaking a versioned line protocol to the Studio plugin.",
+          how: "Client.Execute wraps auth → hello → operation with retries; RelayHub holds one session; an HTTP relay serves session endpoints.",
+          talks: ["pluginbridge"],
+        },
+
+        {
+          id: "app",
+          code: "AP",
+          name: "Composition",
+          group: "composition",
+          gx: 0,
+          gy: 14,
+          w: 1.8,
+          d: 1.8,
+          loc: 337,
+          files: ["internal/app/server.go", "internal/app/lifecycle.go"],
+          what: "Wires every subsystem: registry, policy evaluator, executor, transports, MCP server.",
+          how: "app.New constructs all deps; registerActions registers 20 handlers; Run supervises relay + health + pruning.",
+          talks: ["mcp", "actions", "roblox", "usecase", "platform", "policy"],
+        },
+
+        {
+          id: "actions",
+          code: "AC",
+          name: "Actions",
+          group: "actions",
+          gx: 6,
+          gy: 14,
+          w: 2.4,
+          d: 1.8,
+          loc: 2296,
+          files: [
+            "internal/app/actions/script_*.go",
+            "instance_*.go",
+            "scene_*.go",
+            "ping.go",
+            "workspace_stats.go",
+          ],
+          what: "20 atomic handlers: core ping/stats plus script, instance, and scene operations against Roblox.",
+          how: "Each handler validates input, calls the bridge, returns Output + Diff.",
+          talks: ["roblox"],
+          children: [
+            {
+              c: "ACsc",
+              n: "Scene Ops",
+              l: "456 LoC",
+              what: "snapshot · plan · apply · validate · capture",
+              gx: 0,
+              gy: 0,
+              w: 1.9,
+              d: 1.6,
+              loc: 456,
+              f: "scene_*.go",
+            },
+            {
+              c: "ACin",
+              n: "Instance Ops",
+              l: "607 LoC",
+              what: "create · get · find · set_property · delete · list_children",
+              gx: 4,
+              gy: 0,
+              w: 2.0,
+              d: 1.6,
+              loc: 607,
+              f: "instance_*.go",
+            },
+            {
+              c: "ACsp",
+              n: "Script Ops",
+              l: "400 LoC",
+              what: "create · update · delete · get_source · execute",
+              gx: 8,
+              gy: 0,
+              w: 2.0,
+              d: 1.6,
+              loc: 400,
+              f: "script_*.go",
+            },
+            {
+              c: "ACco",
+              n: "Core Ops",
+              l: "163 LoC",
+              what: "ping · workspace_stats · bridge_ping",
+              gx: 12,
+              gy: 0,
+              w: 1.7,
+              d: 1.6,
+              loc: 163,
+              f: "ping.go, workspace_stats.go",
+            },
+          ],
+        },
+
+        {
+          id: "platform",
+          code: "PL",
+          name: "Platform",
+          group: "platform",
+          gx: -5,
+          gy: 14,
+          w: 1.6,
+          d: 1.6,
+          loc: 534,
+          files: ["internal/platform/config/config.go", "identity/id.go", "logging/logging.go"],
+          what: "Environment config with defaults, correlation IDs, and slog logging.",
+          how: "LoadFromEnv validates ~30 GOX_* vars; identity.NewID issues correlation IDs.",
+          talks: ["app"],
+        },
+
+        {
+          id: "usecase",
+          code: "UC",
+          name: "Engine",
+          group: "engine",
+          gx: 0,
+          gy: 21,
+          w: 2.0,
+          d: 1.8,
+          loc: 2451,
+          files: [
+            "internal/usecase/execute_action.go",
+            "workflow_runtime.go",
+            "run_workflow.go",
+            "runlog_faults.go",
+          ],
+          what: "The execution core: validates, authorizes, runs actions, and schedules workflow steps with retries.",
+          how: "ExecuteActionService + WorkflowRuntime engine: concurrency cap 8, step timeout, retry/backoff, retention.",
+          talks: ["policy", "runlog", "actions", "action"],
+        },
+
+        {
+          id: "workflow",
+          code: "WF",
+          name: "Workflow",
+          group: "core",
+          gx: -5,
+          gy: 28,
+          w: 1.4,
+          d: 1.4,
+          loc: 37,
+          files: ["internal/domain/workflow/workflow.go"],
+          what: "Definition / Step / Condition types describing multi-step workflows.",
+          how: "Plain structs with per-step timeout, retry, and when-conditions.",
+          talks: ["usecase"],
+        },
+
+        {
+          id: "action",
+          code: "AD",
+          name: "Action",
+          group: "core",
+          gx: 0,
+          gy: 28,
+          w: 1.6,
+          d: 1.6,
+          loc: 586,
+          files: ["internal/domain/action/action.go", "schema.go", "errors.go"],
+          what: "Spec, Handler, Registry interfaces and JSON-schema input validation.",
+          how: "InMemoryRegistry; ValidateInput against per-action schemas; Diff results.",
+          talks: ["usecase", "actions"],
+        },
+
+        {
+          id: "runlog",
+          code: "RL",
+          name: "Run Log",
+          group: "core",
+          gx: 6,
+          gy: 28,
+          w: 1.6,
+          d: 1.6,
+          loc: 281,
+          files: ["internal/domain/runlog/runlog.go"],
+          what: "In-memory audit store recording every action & workflow run (running→succeeded/failed).",
+          how: "InMemoryStore with Upsert / List / DeleteOlderThan guarded by RWMutex.",
+          talks: ["usecase", "mcp"],
+        },
+
+        {
+          id: "policy",
+          code: "PO",
+          name: "Policy",
+          group: "core",
+          gx: 12,
+          gy: 14,
+          w: 1.6,
+          d: 1.6,
+          loc: 679,
+          files: ["internal/domain/policy/policy.go", "pack.go"],
+          what: "Deny-by-default rule engine + JSON policy packs; approval gating on allow-rules.",
+          how: "RuleEvaluator with priority-sorted rules; LoadRuleSetFile from GOX_POLICY_RULES_PATH.",
+          talks: ["usecase"],
+        },
+
+        {
+          id: "fault",
+          code: "FA",
+          name: "Fault",
+          group: "core",
+          gx: 6,
+          gy: 21,
+          w: 1.2,
+          d: 1.2,
+          loc: 79,
+          files: ["internal/domain/fault/fault.go"],
+          what: "Machine-readable error codes mapped to JSON-RPC errors and retryability.",
+          how: "fault.As; codes: validation, not_found, denied, internal, unimplemented.",
+          talks: ["mcp", "usecase"],
+        },
+
+        {
+          id: "pluginbridge",
+          code: "PB",
+          name: "Studio Bridge",
+          group: "bridge",
+          gx: 14,
+          gy: 7,
+          w: 2.2,
+          d: 1.8,
+          loc: 2807,
+          files: [
+            "plugin/roblox/src/bridge/GoxBridge.luau",
+            "TransportLoop.luau",
+            "HttpRelayAdapter.luau",
+            "Protocol.luau",
+            "PluginBootstrap.luau",
+          ],
+          what: "Luau bridge inside Roblox Studio dispatching 18 operations to Roblox APIs.",
+          how: "TransportLoop enforces auth→hello; GoxBridge.HandleJson dispatches; idempotency cache (256).",
+          talks: ["pluginentry"],
+        },
+
+        {
+          id: "pluginentry",
+          code: "PE",
+          name: "Plugin Entry",
+          group: "surface",
+          gx: 14,
+          gy: 0,
+          w: 1.6,
+          d: 1.6,
+          loc: 245,
+          files: ["plugin/roblox/src/plugin/PluginMain.server.luau"],
+          what: "Studio plugin UI that starts/stops the relay bridge loop.",
+          how: "Plugin settings UI → PluginBootstrap.StartWithHttpRelayAsync.",
+          talks: ["pluginbridge"],
+        },
+
+        {
+          id: "runlogstore",
+          code: "RS",
+          name: "Audit Logs",
+          group: "storage",
+          gx: -5,
+          gy: 35,
+          w: 2.2,
+          d: 1.6,
+          loc: 0,
+          slab: true,
+          files: ["internal/domain/runlog/runlog.go (InMemoryStore)"],
+          what: "In-memory run records — no external database.",
+          how: "map[string]Record guarded by RWMutex; pruned by retention age.",
+          talks: ["runlog"],
+        },
+
+        {
+          id: "policypacks",
+          code: "PP",
+          name: "Policy Packs",
+          group: "storage",
+          gx: 0,
+          gy: 35,
+          w: 2.2,
+          d: 1.6,
+          loc: 0,
+          slab: true,
+          files: ["policy/packs/local-dev.json", "codex-roblox-dev.json", "quarantine.json"],
+          what: "JSON allowlists: local-dev, codex-roblox-dev, quarantine.",
+          how: "Loaded via GOX_POLICY_RULES_PATH; schema-checked.",
+          talks: ["policy"],
+        },
+      ];
+
+      const EDGES = [
+        { f: "cmd", t: "app", pay: "config + stdio" },
+        { f: "cmd", t: "platform", pay: "GOX_* env vars" },
+        { f: "app", t: "mcp", pay: "registry, executor, runlogs" },
+        { f: "app", t: "actions", pay: "register 20 handlers" },
+        { f: "app", t: "roblox", pay: "Transport + RelayHub" },
+        { f: "app", t: "usecase", pay: "policy evaluator, runlogs" },
+        { f: "app", t: "policy", pay: "RuleSet" },
+        { f: "mcp", t: "usecase", pay: "ExecuteActionCommand" },
+        { f: "mcp", t: "runlog", pay: "run records (gox://runs)" },
+        { f: "usecase", t: "policy", pay: "DecisionInput" },
+        { f: "usecase", t: "runlog", pay: "runlog.Record" },
+        { f: "usecase", t: "action", pay: "spec + schema" },
+        { f: "usecase", t: "actions", pay: "action.Request" },
+        { f: "actions", t: "roblox", pay: "Request{operation,payload}" },
+        { f: "roblox", t: "pluginbridge", pay: "JSON lines (relay/tcp)" },
+        { f: "pluginbridge", t: "pluginentry", pay: "bootstrap" },
+        { f: "pkgclient", t: "mcp", pay: "JSON-RPC stdio", dashed: 1 },
+      ];
+
+      const EXTERNALS = [
+        {
+          id: "aiclient",
+          name: "AI Client",
+          sub: "MCP host",
+          gx: -7,
+          gy: 1,
+          target: "mcp",
+          pay: "tools/call, initialize",
+        },
+        {
+          id: "studioclient",
+          name: "Roblox Studio",
+          sub: "Luau VM",
+          gx: 19,
+          gy: 4,
+          target: "pluginbridge",
+          pay: "Roblox APIs",
+        },
+        {
+          id: "testsuite",
+          name: "Test Suite",
+          sub: "go test -race",
+          gx: -10,
+          gy: 26,
+          target: "usecase",
+          pay: "e2e + unit coverage",
+          dashed: 1,
+        },
+      ];
+
+      const TRACE = [
+        {
+          s: "aiclient",
+          t: "The AI client opens stdio and sends <b>initialize</b>, <b>tools/list</b>, then <b>tools/call</b>.",
+        },
+        {
+          s: "mcp",
+          t: "MCP Server (<b>adapter/mcp/server.go</b>) receives tools/call; <b>guards.checkAndConsume</b> enforces the 1 MiB payload cap.",
+        },
+        {
+          s: "mcp",
+          t: "<b>executeAction</b> parses arguments + meta: actor, correlationId, dryRun, approved.",
+        },
+        {
+          s: "usecase",
+          t: "<b>ExecuteActionService.Execute</b> (<b>usecase/execute_action.go</b>) resolves the handler from the registry.",
+        },
+        {
+          s: "action",
+          t: "Action domain validates input against the handler's JSON schema (<b>domain/action/schema.go</b>).",
+        },
+        {
+          s: "policy",
+          t: "Policy evaluator decides allow/deny + approval gating (<b>domain/policy/policy.go</b>).",
+        },
+        {
+          s: "runlog",
+          t: "A <b>running</b> runlog record is persisted (<b>domain/runlog/runlog.go</b>).",
+        },
+        {
+          s: "actions",
+          t: "The handler runs (<b>internal/app/actions</b>), e.g. scene_apply builds a mutation payload.",
+        },
+        {
+          s: "roblox",
+          t: "Bridge client wraps it into a <b>Request</b> and sends auth → hello → op (<b>adapter/roblox/client.go</b>).",
+        },
+        {
+          s: "pluginbridge",
+          t: "Studio <b>TransportLoop</b> decodes the line and dispatches to <b>GoxBridge</b> (<b>plugin/roblox/src/bridge</b>).",
+        },
+        {
+          s: "pluginbridge",
+          t: "GoxBridge calls Roblox APIs and returns a Response with matching requestId/correlationId.",
+        },
+        {
+          s: "runlog",
+          t: "Response is validated, runlog flips to <b>succeeded</b> with a diff summary, result returns to the client.",
+        },
+      ];
+
+      const OVERVIEW_WHAT =
+        "Gox is an <b>AI-agent runtime for Roblox Studio</b> exposed over MCP. An AI client (Claude, Codex, Cursor…) talks JSON-RPC over stdio to the <b>MCP server</b>, which turns each <b>tools/call</b> into an <b>action</b> — a validated, policy-gated, audited operation. Read-only and write actions alike route through the <b>execute engine</b>, which checks the action schema, evaluates the <b>deny-by-default policy</b>, and records every run. Bridge-bound actions cross the <b>Roblox adapter</b> (TCP or relay-http) into the <b>Studio plugin</b>, which performs the actual Roblox API work — scripts, instances, and whole scene transactions.";
+
+      const OVERVIEW_HOW =
+        "A clean layered Go architecture. <b>Platform</b> loads ~30 env vars and issues correlation IDs. The <b>composition root</b> (internal/app) wires a 20-handler <b>registry</b>, a <b>policy evaluator</b>, and an <b>execute engine</b> into the MCP server. <b>Core domains</b> are pure and dependency-free: action specs/schemas, workflow definitions, run-log records, policy rules, and a fault taxonomy. The <b>Roblox adapter</b> implements a versioned, idempotent line protocol with two transports, mirrored by a <b>Luau bridge</b> inside Studio. Everything is exercised by Go tests (unit + e2e, <b>go test -race</b>).";
+
+      /* ==================================================== END DATA ==== */
+      /* ========================================================== ENGINE ==== */
+      const EX = { x: 26, y: 13 },
+        EY = { x: -26, y: 13 },
+        EZ = { x: 0, y: -16 };
+      const iso = (gx, gy, h = 0) => ({
+        x: gx * EX.x + gy * EY.x,
+        y: gx * EX.y + gy * EY.y + h * EZ.y,
+      });
+
+      const hsl = (h, s, l) => `hsl(${h} ${s}% ${l}%)`;
+      function groupOf(id) {
+        const s = byId[id];
+        return s ? s.group : null;
+      }
+      const byId = {};
+      STRUCTURES.forEach((s) => (byId[s.id] = s));
+
+      function blockColor(s) {
+        const g = GROUPS.find((g) => g.id === s.group);
+        const hue = g ? g.hue : 210;
+        if (s.slab) return { top: "#2b333f", right: "#1e242d", left: "#161b22", hue: 210 };
+        return { top: hsl(hue, 50, 54), right: hsl(hue, 46, 38), left: hsl(hue, 44, 27), hue };
+      }
+
+      /* ---------- rendering ---------- */
+      const SVG_NS = "http://www.w3.org/2000/svg";
+      let svg, world, blocksG, edgesG, dotsG, exG;
+      let view = { mode: "main" }; // {mode:'main'} | {mode:'inside', parentId}
+      let selectedId = "mcp";
+      let anim = []; // dot animators
+      let pan = { x: 0, y: 0, scale: 1 };
+      let down = null;
+
+      function el(tag, attrs, parent) {
+        const e = document.createElementNS(SVG_NS, tag);
+        for (const k in attrs) {
+          if (attrs[k] !== undefined) e.setAttribute(k, attrs[k]);
+        }
+        if (parent) parent.appendChild(e);
+        return e;
+      }
+      function poly(points, attrs, parent) {
+        return el(
+          "polygon",
+          { points: points.map((p) => `${p.x},${p.y}`).join(" "), ...attrs },
+          parent,
+        );
+      }
+
+      function currentStructures() {
+        if (view.mode === "inside") {
+          const parent = byId[view.parentId];
+          return (parent.children || []).map((c) => ({
+            id: view.parentId + "." + c.c,
+            code: c.c,
+            name: c.n,
+            group: parent.group,
+            gx: c.gx,
+            gy: c.gy,
+            w: c.w,
+            d: c.d,
+            loc: c.loc,
+            _child: true,
+            files: [c.f],
+            what: c.what,
+            how: parent.files.join(", "),
+            talks: [],
+          }));
+        }
+        return STRUCTURES;
+      }
+
+      function heightOf(s) {
+        if (s.slab) return 0.6;
+        if (s.h) return s.h; // optional explicit height override
+        return Math.max(1, Math.min(5, Math.round(Math.sqrt(s.loc) / 10)));
+      }
+
+      function blockGeom(s) {
+        const h = heightOf(s);
+        const A = iso(s.gx, s.gy, 0),
+          B = iso(s.gx + s.w, s.gy, 0),
+          C = iso(s.gx + s.w, s.gy + s.d, 0),
+          D = iso(s.gx, s.gy + s.d, 0);
+        const At = iso(s.gx, s.gy, h),
+          Bt = iso(s.gx + s.w, s.gy, h),
+          Ct = iso(s.gx + s.w, s.gy + s.d, h),
+          Dt = iso(s.gx, s.gy + s.d, h);
+        const top = {
+          x: (s.gx + s.w / 2) * EX.x + (s.gy + s.d / 2) * EY.x,
+          y: (s.gx + s.w / 2) * EX.y + (s.gy + s.d / 2) * EY.y + h * EZ.y,
+        };
+        return {
+          h,
+          A,
+          B,
+          C,
+          D,
+          At,
+          Bt,
+          Ct,
+          Dt,
+          top,
+          center: { x: top.x, y: (s.gx + s.w / 2) * EX.y + (s.gy + s.d / 2) * EY.y },
+        };
+      }
+
+      function drawBlock(s, g) {
+        const b = blockGeom(s),
+          c = blockColor(s);
+        const grp = el("g", { class: "block", "data-id": s.id, tabindex: "0" }, g);
+        if (!s.slab) {
+          poly([b.Bt, b.Ct, b.C, b.B], { class: "face face-right", fill: c.right }, grp); // right face
+          poly([b.Dt, b.Ct, b.C, b.D], { class: "face face-left", fill: c.left }, grp); // left face
+        } else {
+          poly([b.Bt, b.Ct, b.C, b.B], { class: "face face-right", fill: c.right }, grp);
+          poly([b.Dt, b.Ct, b.C, b.D], { class: "face face-left", fill: c.left }, grp);
+        }
+        poly([b.At, b.Bt, b.Ct, b.Dt], { class: "face face-top", fill: c.top }, grp);
+        // roof label (code + name), centered so nothing spills below the base
+        const codeTxt = el(
+          "text",
+          {
+            x: b.top.x,
+            y: b.top.y - 4,
+            "text-anchor": "middle",
+            fill: "#0c0f14",
+            style: "font-size:11px;font-weight:800;letter-spacing:.5px",
+          },
+          grp,
+        );
+        codeTxt.textContent = s.code;
+        const nm = el(
+          "text",
+          {
+            x: b.top.x,
+            y: b.top.y + 11,
+            "text-anchor": "middle",
+            fill: "#0c0f14",
+            style: "font-size:9px;font-weight:700",
+          },
+          grp,
+        );
+        nm.textContent = s.name;
+      }
+
+      // Route an edge through optional via waypoints ([[gx,gy]...]) with L-elbows.
+      function edgePath(e) {
+        const gs = blockGeom(byId[e.f]),
+          gt = blockGeom(byId[e.t]);
+        const pts = [gs.top];
+        (e.via || []).forEach(([gx, gy]) => pts.push(iso(gx, gy, 0)));
+        pts.push(gt.top);
+        let d = `M ${pts[0].x} ${pts[0].y}`;
+        for (let i = 1; i < pts.length; i++) {
+          const a = pts[i - 1],
+            b = pts[i];
+          const m = (a.y + b.y) / 2;
+          d += ` L ${a.x} ${m} L ${b.x} ${m}`;
+        }
+        d += ` L ${pts[pts.length - 1].x} ${pts[pts.length - 1].y}`;
+        return d;
+      }
+
+      function drawEdge(e, g) {
+        if (view.mode === "inside") return;
+        const s = byId[e.f],
+          t = byId[e.t];
+        if (!s || !t) return;
+        const d = edgePath(e);
+        const cls = "edge " + (e.dashed ? "dashed" : "solid");
+        const p = el("path", { class: cls, d, "data-f": e.f, "data-t": e.t }, g);
+        const title = el("title", {}, p);
+        title.textContent = s.name + " → " + t.name + (e.pay ? ": " + e.pay : "");
+        if (!e.dashed) {
+          const n = Math.max(1, e.flow || 1); // number of payload dots
+          for (let k = 0; k < n; k++) {
+            const track = el("path", { class: "track", d }, g);
+            anim.push({
+              track,
+              e,
+              i: 0,
+              speed: 0.012 + Math.random() * 0.006,
+              off: Math.random() + k * 0.2,
+            });
+          }
+        }
+      }
+
+      function drawExternal(x) {
+        const t = byId[x.target];
+        if (!t) return;
+        const gt = blockGeom(t);
+        const p = iso(x.gx, x.gy, 0);
+        const grp = el("g", { class: "ext" }, exG);
+        el("path", { class: "leader", d: `M ${p.x} ${p.y} L ${gt.top.x} ${gt.top.y}` }, grp);
+        const lbl = el("text", { x: p.x, y: p.y, "text-anchor": "middle", class: "extlbl" }, grp);
+        const tspan = el("tspan", {}, lbl);
+        tspan.textContent = x.name;
+        el("tspan", { class: "sub", x: p.x, dy: 12 }, lbl).textContent =
+          x.sub + (x.dashed ? " · advisory" : "");
+      }
+
+      function computeBounds() {
+        let minX = 1e9,
+          maxX = -1e9,
+          minY = 1e9,
+          maxY = -1e9;
+        const push = (x, y) => {
+          minX = Math.min(minX, x);
+          maxX = Math.max(maxX, x);
+          minY = Math.min(minY, y);
+          maxY = Math.max(maxY, y);
+        };
+        currentStructures().forEach((s) => {
+          const b = blockGeom(s);
+          [b.A, b.B, b.C, b.D, b.At, b.Bt, b.Ct, b.Dt].forEach((p) => push(p.x, p.y));
+        });
+        EXTERNALS.forEach((x) => {
+          const p = iso(x.gx, x.gy, 0);
+          push(p.x - 70, p.y);
+          push(p.x + 70, p.y + 26);
+        });
+        return { minX, maxX, minY, maxY };
+      }
+
+      function render() {
+        const wrap = document.getElementById("map");
+        const old = wrap.querySelector("svg");
+        if (old) old.remove();
+        anim = [];
+        pan = { x: 0, y: 0, scale: 1 };
+        svg = el("svg", { width: "100%", height: "100%" });
+        wrap.appendChild(svg);
+
+        const b = computeBounds();
+        const padX = 90,
+          padY = 110;
+        const vw = Math.max(320, b.maxX - b.minX + padX * 2);
+        const vh = Math.max(240, b.maxY - b.minY + padY * 2);
+        svg.setAttribute("viewBox", `${b.minX - padX} ${b.minY - padY} ${vw} ${vh}`);
+
+        const defs = el("defs", {}, svg);
+        const pat = el(
+          "pattern",
+          { id: "grid", width: 26, height: 13, patternUnits: "userSpaceOnUse" },
+          defs,
+        );
+        el("path", { d: "M26 0 L0 13 M0 0 L26 13", class: "gridline" }, pat);
+
+        world = el("g", {}, svg);
+        // grid ground
+        const gb = computeBounds();
+        const ground = el(
+          "rect",
+          {
+            x: gb.minX - 40,
+            y: gb.minY - 40,
+            width: gb.maxX - gb.minX + 80,
+            height: gb.maxY - gb.minY + 80,
+            fill: "url(#grid)",
+            opacity: ".5",
+          },
+          world,
+        );
+
+        edgesG = el("g", {}, world);
+        blocksG = el("g", {}, world);
+        dotsG = el("g", {}, world);
+        exG = el("g", {}, world);
+
+        // edges (only in main view)
+        if (view.mode === "main") EDGES.forEach((e) => drawEdge(e, edgesG));
+        // externals
+        if (view.mode === "main") EXTERNALS.forEach((x) => drawExternal(x));
+        // blocks sorted painter
+        const list = currentStructures()
+          .slice()
+          .sort((a, b) => a.gx + a.gy - (b.gx + b.gy));
+        list.forEach((s) => drawBlock(s, blocksG));
+        // dots
+        anim.forEach((a) => {
+          const dot = el("circle", { r: 2.6, fill: "#7fd6ff", class: "dot" }, dotsG);
+          const title = el("title", {}, dot);
+          title.textContent =
+            (byId[a.e.f]?.name || a.e.f) +
+            " → " +
+            (byId[a.e.t]?.name || a.e.t) +
+            (a.e.pay ? ": " + a.e.pay : "");
+          a.dot = dot;
+        });
+
+        wireEvents();
+        applyHighlight();
+      }
+
+      function project(sx, sy) {
+        return { x: sx * pan.scale + pan.x, y: sy * pan.scale + pan.y };
+      }
+
+      /* ---------- animation loop ---------- */
+      let lastT = 0;
+      function tick(ts) {
+        if (!lastT) lastT = ts;
+        const dt = Math.min(50, ts - lastT);
+        lastT = ts;
+        anim.forEach((a) => {
+          const len = a.track.getTotalLength();
+          a.i = (a.i + dt * a.speed) % len;
+          const p = a.track.getPointAtLength((a.i + a.off * len) % len);
+          a.dot.setAttribute("cx", p.x);
+          a.dot.setAttribute("cy", p.y);
+        });
+        requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+
+      /* ---------- interactions ---------- */
+      function wireEvents() {
+        document.querySelectorAll(".block").forEach((node) => {
+          node.addEventListener("mouseenter", showTip);
+          node.addEventListener("mousemove", moveTip);
+          node.addEventListener("mouseleave", hideTip);
+          node.addEventListener("dblclick", (e) => {
+            e.stopPropagation();
+            const base = node.dataset.id.split(".")[0];
+            if (byId[base] && byId[base].children) goInside(base);
+          });
+        });
+        document.querySelectorAll(".edge").forEach((node) => {
+          node.addEventListener("mouseenter", (e) => {
+            node.classList.add("hl");
+            highlightEdge(node.dataset.f, node.dataset.t, true);
+          });
+          node.addEventListener("mouseleave", (e) => {
+            node.classList.remove("hl");
+            highlightEdge(node.dataset.f, node.dataset.t, false);
+          });
+        });
+      }
+
+      function nodeById(id) {
+        if (!id.includes(".")) return byId[id] || null;
+        const [p, c] = id.split(".");
+        const parent = byId[p];
+        if (!parent || !parent.children) return null;
+        const ch = parent.children.find((x) => x.c === c);
+        if (!ch) return null;
+        return {
+          id,
+          code: ch.c,
+          name: ch.n,
+          what: ch.what,
+          how: "part of " + parent.name + " — " + parent.files.join(", "),
+          files: [ch.f],
+          group: parent.group,
+          loc: ch.loc,
+        };
+      }
+      function showTip(e) {
+        const node = nodeById(e.currentTarget.dataset.id);
+        if (!node) return;
+        const tip = document.getElementById("tip");
+        const g = GROUPS.find((g) => g.id === node.group);
+        tip.innerHTML = `
+    <div class="t">${node.name}<span class="tag" style="color:${hsl(g.hue, 60, 70)}">${g.name}</span></div>
+    <div class="w">${node.what}</div>
+    <div class="h">${node.how}</div>
+    <div class="files">${(node.files || []).map((f) => "‹" + f + "›").join("<br>")}</div>`;
+        tip.style.opacity = 1;
+      }
+      function moveTip(e) {
+        const tip = document.getElementById("tip");
+        tip.style.left = e.clientX + 16 + "px";
+        tip.style.top = e.clientY + 16 + "px";
+      }
+      function hideTip() {
+        document.getElementById("tip").style.opacity = 0;
+      }
+
+      function select(id) {
+        selectedId = id;
+        applyHighlight();
+        renderSelected();
+      }
+
+      function highlightEdge(f, t, on) {
+        document.querySelectorAll(".block").forEach((n) => {
+          if (n.dataset.id === f || n.dataset.id === t) {
+            n.querySelectorAll(".face-top").forEach(
+              (p) => (p.style.filter = on ? "brightness(1.35)" : ""),
+            );
+          }
+        });
+      }
+
+      function applyHighlight() {
+        document.querySelectorAll(".block").forEach((n) => {
+          const on =
+            n.dataset.id === selectedId ||
+            (selectedId.includes(".") && n.dataset.id === selectedId.split(".")[0]);
+          n.style.opacity = on ? 1 : selectedId ? 0.55 : 1;
+          if (on) {
+            n.querySelectorAll(".face-top").forEach((p) => (p.style.filter = "brightness(1.25)"));
+          }
+        });
+      }
+
+      function renderSelected() {
+        const box = document.getElementById("sel-content");
+        const node = nodeById(selectedId);
+        if (!node) {
+          box.innerHTML = '<span class="hint">Click any block on the map.</span>';
+          return;
+        }
+        const isMain = !selectedId.includes(".");
+        const s = isMain ? byId[selectedId] : null;
+        const g = GROUPS.find((g) => g.id === node.group);
+        const files = s ? s.files : node.files;
+        const talks = s && s.talks ? s.talks.map((t) => (byId[t] ? byId[t].name : t)) : [];
+        box.innerHTML = `
+    <div class="sel-head">
+      <span class="sel-code" style="color:${hsl(g.hue, 60, 64)}">${node.code}</span>
+      <span class="sel-name">${node.name}</span>
+      <span class="sel-group">${g.name}</span>
+    </div>
+    <div class="sel-what">${node.what}</div>
+    <div class="sel-how">${node.how}</div>
+    <div class="sel-files">${files.map((f) => "<div>‹ " + f + " ›</div>").join("")}</div>
+    ${talks.length ? '<div class="sel-talks">→ talks to: ' + talks.join(", ") + "</div>" : ""}
+    ${s && s.children ? '<div class="sel-talks" style="margin-top:8px">↳ has drill-down — <b>double-click</b> or use <b>#inside=' + s.id + "</b></div>" : ""}`;
+      }
+
+      /* ---------- pan / zoom ---------- */
+      const mapEl = document.getElementById("map");
+      function applyPan() {
+        if (world)
+          world.setAttribute("transform", `translate(${pan.x} ${pan.y}) scale(${pan.scale})`);
+      }
+      mapEl.addEventListener("mousedown", (e) => {
+        down = { x: e.clientX, y: e.clientY, px: pan.x, py: pan.y, target: e.target, moved: false };
+        mapEl.classList.add("drag");
+      });
+      window.addEventListener("mousemove", (e) => {
+        if (!down) return;
+        const dx = e.clientX - down.x,
+          dy = e.clientY - down.y;
+        if (!down.moved && Math.hypot(dx, dy) > 5) down.moved = true;
+        if (down.moved) {
+          pan.x = down.px + dx;
+          pan.y = down.py + dy;
+          applyPan();
+        }
+      });
+      window.addEventListener("mouseup", (e) => {
+        if (!down) return;
+        const wasPan = down.moved;
+        down = null;
+        mapEl.classList.remove("drag");
+        if (!wasPan && e.target && e.target.closest) {
+          const blk = e.target.closest(".block");
+          if (blk) select(blk.dataset.id);
+        }
+      });
+      mapEl.addEventListener(
+        "wheel",
+        (e) => {
+          e.preventDefault();
+          const rect = mapEl.getBoundingClientRect();
+          const mx = e.clientX - rect.left,
+            my = e.clientY - rect.top;
+          const ns = Math.max(0.4, Math.min(3, pan.scale * (e.deltaY < 0 ? 1.15 : 1 / 1.15)));
+          pan.x = mx - (mx - pan.x) * (ns / pan.scale);
+          pan.y = my - (my - pan.y) * (ns / pan.scale);
+          pan.scale = ns;
+          applyPan();
+        },
+        { passive: false },
+      );
+
+      /* ---------- inside drill-down ---------- */
+      function goInside(id) {
+        view = { mode: "inside", parentId: id };
+        document.getElementById("inside-bar").style.display = "flex";
+        document.getElementById("crumb").textContent = byId[id].name + " — drill-down";
+        render();
+        select(id);
+      }
+      document.getElementById("back").addEventListener("click", () => {
+        view = { mode: "main" };
+        document.getElementById("inside-bar").style.display = "none";
+        render();
+      });
+
+      /* ---------- build static UI ---------- */
+      function buildRail() {
+        const box = document.getElementById("groups");
+        GROUPS.forEach((g) => {
+          const members = STRUCTURES.filter((s) => s.group === g.id);
+          const div = document.createElement("div");
+          div.className = "group";
+          div.dataset.g = g.id;
+          div.innerHTML = `<span class="swatch" style="background:${hsl(g.hue, 50, 54)}"></span><span class="gname">${g.name}</span><span class="gcount">${members.length}</span>`;
+          div.addEventListener("click", () => {
+            toggleGroup(g.id);
+          });
+          box.appendChild(div);
+        });
+        const lg = document.getElementById("legend-groups");
+        GROUPS.forEach((g) => {
+          const el = document.createElement("span");
+          el.style.cssText = `font-size:10px;color:var(--ink-dim);padding:2px 8px;border:1px solid var(--line2);border-radius:20px;`;
+          el.innerHTML = `<span style="color:${hsl(g.hue, 60, 70)}">●</span> ${g.name}`;
+          lg.appendChild(el);
+        });
+      }
+      function toggleGroup(id) {
+        const div = document.querySelector(`.group[data-g="${id}"]`);
+        const on = div.classList.toggle("on");
+        document.querySelectorAll(".block").forEach((n) => {
+          const s = byId[n.dataset.id.split(".")[0]] || byId[n.dataset.id];
+          if (!on) {
+            n.style.opacity = 1;
+            return;
+          }
+          n.style.opacity = s && s.group === id ? 1 : 0.15;
+        });
+      }
+
+      function buildTrace() {
+        const ol = document.getElementById("trace");
+        TRACE.forEach((step, i) => {
+          const li = document.createElement("li");
+          li.innerHTML = `<span class="n">${i + 1}</span><span class="s">${step.t}<span class="src">${step.s}</span></span>`;
+          li.addEventListener("click", () => {
+            document.querySelectorAll(".trace li").forEach((x) => x.classList.remove("on"));
+            li.classList.add("on");
+            flashBlock(step.s);
+          });
+          ol.appendChild(li);
+        });
+      }
+      function flashBlock(id) {
+        document.querySelectorAll(".block").forEach((n) => (n.style.opacity = 0.2));
+        document.querySelectorAll(".block").forEach((n) => {
+          if (n.dataset.id === id || n.dataset.id.split(".")[0] === id) {
+            n.style.opacity = 1;
+          }
+        });
+        const s = byId[id];
+        if (s) select(id);
+      }
+
+      document.getElementById("overview-what").innerHTML = OVERVIEW_WHAT;
+      document.getElementById("overview-how").innerHTML = OVERVIEW_HOW;
+
+      /* ---------- hash debug hooks ---------- */
+      function applyHash() {
+        const h = location.hash;
+        if (h.startsWith("#inside=")) {
+          const id = h.slice(8);
+          if (byId[id] && byId[id].children) goInside(id);
+        } else if (h.startsWith("#trace=")) {
+          const n = parseInt(h.slice(7), 10) - 1;
+          if (n >= 0 && n < TRACE.length) {
+            const li = document.querySelectorAll(".trace li")[n];
+            if (li) li.click();
+          }
+        }
+      }
+
+      buildRail();
+      buildTrace();
+      render();
+      renderSelected();
+      applyHash();
+      window.addEventListener("hashchange", applyHash);
+    </script>
+  </body>
+</html>
