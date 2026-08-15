@@ -5,15 +5,17 @@ Examples of each tool's output.
 ## Banner (built-in 5x7 font)
 
 ```bash
-python3 scripts/banner.py 'pix'
+bun scripts/banner.ts 'pix'
 ```
 
 ```
-█████  ███  █   █
-█   █   █   █ █
-█████   █    █
-█       █   █ █
-█      ███  █   █
+████  █████ █   █
+█   █   █   █   █
+█   █   █    █ █
+████    █     █
+█       █    █ █
+█       █   █   █
+█     █████ █   █
 ```
 
 (with `figlet`/`toilet` installed, many more fonts are available via `--font`)
@@ -21,32 +23,28 @@ python3 scripts/banner.py 'pix'
 ## Image → ASCII
 
 ```bash
-python3 scripts/img2ascii.py logo.png --width 40
+bun scripts/img2ascii.ts logo.png --width 40
 ```
 
-```
-          .:;irsXA253hMHGS#9B&@
-      .:irshMHGS#9B&@
-    :sX25hMHGS#9B&@
-   .sA25hMHGS#9B&@
-```
+Uses `chafa` (block art, best), then `jp2a`, `viu`, `img2txt` — output varies by
+which tool is installed. With none installed, it prints an install hint instead.
 
 ## Box with title
 
 ```bash
-echo 'hello' | python3 scripts/frames.py box --title 'pix'
+echo 'hello' | bun scripts/frames.ts box --title 'pix'
 ```
 
 ```
-┌─pix───┐
-│ hello │
-└───────┘
+┌─pix─┐
+│hello│
+└─────┘
 ```
 
 ## Divider
 
 ```bash
-python3 scripts/frames.py divider --text 'Section 2'
+bun scripts/frames.ts divider --text 'Section 2'
 ```
 
 ```
@@ -56,13 +54,13 @@ python3 scripts/frames.py divider --text 'Section 2'
 ## Speech bubble
 
 ```bash
-python3 scripts/frames.py bubble --text 'deploy now'
+bun scripts/frames.ts bubble --text 'deploy now'
 ```
 
 ```
- ┌─────────────┐
- < deploy now  >
- └─────────────┘
+.------------.
+< deploy now >
+`------------'
         \
          V
 ```
@@ -70,13 +68,15 @@ python3 scripts/frames.py bubble --text 'deploy now'
 ## Pure-ASCII fallback (for comments/emails)
 
 ```bash
-python3 scripts/banner.py 'OK' --char '#'
+bun scripts/banner.ts 'OK' --char '#'
 ```
 
 ```
- ####  #  #
-#    # # #
-#    # ##
-#    # # #
- ####  #  #
+ ###  #   #
+#   # #  #
+#   # # #
+#   # ##
+#   # # #
+#   # #  #
+ ###  #   #
 ```

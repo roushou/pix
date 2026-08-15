@@ -7,45 +7,45 @@ description: Generate ASCII and Unicode art in the terminal — figlet-style tex
 
 Produce ASCII/Unicode art in the terminal. Three zero-dependency scripts (banner falls back to a built-in font, so it always works):
 
-- `banner.py` — large text banners (figlet/toilet when available, built-in 5x7 block font otherwise)
-- `img2ascii.py` — convert an image to ASCII/ANSI art
-- `frames.py` — boxes, frames, dividers, speech bubbles
+- `banner.ts` — large text banners (figlet/toilet when available, built-in 5x7 block font otherwise)
+- `img2ascii.ts` — convert an image to ASCII/ANSI art
+- `frames.ts` — boxes, frames, dividers, speech bubbles
 
 ## Workflow
 
-1. **Pick the form.** Text banner → `banner.py`. Image → `img2ascii.py`. Decoration around text → `frames.py`.
+1. **Pick the form.** Text banner → `banner.ts`. Image → `img2ascii.ts`. Decoration around text → `frames.ts`.
 2. **Render to stdout** and include the result in your reply inside a fenced code block so spacing is preserved.
 3. **Keep it legible.** Limit width (defaults are sane); don't dump a huge image at full resolution.
 
-## banner.py — text banners
+## banner.ts — text banners
 
 ```bash
-python3 scripts/banner.py 'pix'
-python3 scripts/banner.py 'deploy' --char '#'   # pure ASCII fill
-echo 'release' | python3 scripts/banner.py
+bun scripts/banner.ts 'pix'
+bun scripts/banner.ts 'deploy' --char '#'   # pure ASCII fill
+echo 'release' | bun scripts/banner.ts
 ```
 
 Prefers `figlet`/`toilet` if installed (`brew install figlet toilet`) for many
 fonts (`--font big`, `--font shadow`, …); otherwise falls back to the built-in
 5x7 block font (uppercase, digits, and common symbols).
 
-## img2ascii.py — image to ASCII
+## img2ascii.ts — image to ASCII
 
 ```bash
-python3 scripts/img2ascii.py logo.png
-python3 scripts/img2ascii.py photo.jpg --width 60
-python3 scripts/img2ascii.py photo.jpg --width 80 --color
+bun scripts/img2ascii.ts logo.png
+bun scripts/img2ascii.ts photo.jpg --width 60
+bun scripts/img2ascii.ts photo.jpg --width 80 --color
 ```
 
-Uses `chafa` (best, `brew install chafa`), then `jp2a`/`viu`/`img2txt`, then
-Pillow as a last resort. Grayscale by default; `--color` only with chafa.
+Uses `chafa` (best, `brew install chafa`), then `jp2a`/`viu`/`img2txt`.
+Grayscale by default; `--color` only with chafa.
 
-## frames.py — boxes, dividers, bubbles
+## frames.ts — boxes, dividers, bubbles
 
 ```bash
-echo 'hello' | python3 scripts/frames.py box --title 'pix'
-python3 scripts/frames.py divider --text 'Section 2'
-python3 scripts/frames.py bubble --text 'deploy now'
+echo 'hello' | bun scripts/frames.ts box --title 'pix'
+bun scripts/frames.ts divider --text 'Section 2'
+bun scripts/frames.ts bubble --text 'deploy now'
 ```
 
 ## Rules
