@@ -49,9 +49,6 @@ Then `/reload` (or restart pi). Uninstall with `pi remove <source>`.
 - **`testing`** — TDD red-green-refactor + coverage guidance: happy path, edge cases, boundaries, and error paths.
 - **`debugging`** — systematic bug workflow: reproduce → locate → hypothesize → confirm → fix → verify.
 - **`performance`** — measure-first optimization: profile, fix the bottleneck, re-measure, and guard with benchmarks.
-- **`webapp-testing`** — Playwright browser automation: test local web apps, debug UI behavior, capture screenshots and browser logs.
-- **`skill-creator`** — author, refine, and evaluate skills: create from scratch, improve triggering descriptions, run evals, and package `.skill` files.
-- **`mcp-builder`** — build high-quality MCP servers (Python FastMCP or TypeScript SDK) to expose external APIs/services as tools.
 - **`ascii-art`** — ASCII/Unicode art: text banners, image-to-ASCII, boxes, dividers, and speech bubbles.
 - **`diagram-maker`** — SVG/HTML and Excalidraw diagrams for concepts, architecture, flows, and whiteboards (from openclaw, MIT).
 
