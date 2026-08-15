@@ -22,55 +22,62 @@ Then `/reload` (or restart pi). Uninstall with `pi remove <source>`.
 
 ### Extensions (`extensions/`)
 
-| Extension           | What it does                                                                                                                                                           |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `notify`            | Desktop notification (macOS + Linux) when the agent finishes a task, with outcome, duration, files changed, and cost. Optional `notifyOnStart` config.                 |
-| `footer`            | Custom TUI footer: model + thinking level, context-usage bar, token/cost totals, git branch, and a dirty indicator (⚑).                                                |
-| `permission-gate`   | Blocks catastrophic bash (`rm -rf /`, `mkfs`) and confirms risky commands (`sudo`, force push, `rm -rf`, `git reset --hard`, …). Fails closed in non-interactive mode. |
-| `protected-paths`   | Blocks `write`/`edit` to sensitive paths (`.env`, `*.key`, `node_modules/`, `.git/`, `.ssh/`, …).                                                                      |
-| `todo`              | Persistent todo list: LLM-managed `todo` tool, widget above the editor, `/todos` toggle.                                                                               |
-| `session-name`      | Auto-names sessions from their first user message (stopword-aware). `/rename [name]` to override.                                                                      |
-| `plan-mode`         | Read-only exploration + plan/execute: `/plan` (or `Ctrl+Alt+P`) disables write tools and restricts bash; parses `Plan:` steps, tracks `[DONE:n]` progress in a widget. |
-| `handoff`           | `/handoff <goal>` distills the current branch into a self-contained prompt, lets you edit it, and opens a new session pre-filled with it.                              |
-| `bookmark`          | `/bookmark [label]` / `/unbookmark` label session entries for `/tree` navigation.                                                                                      |
-| `interactive-shell` | Runs interactive commands (`!vim`, `!git rebase -i`, `!htop`, …) with full terminal access via the `!` prefix.                                                         |
-| `summarize`         | `/summarize` renders a conversation summary in a scrollable Markdown overlay.                                                                                          |
-| `titlebar-spinner`  | Braille spinner in the terminal title while the agent works; resets to `π - session - dir` when done.                                                                  |
-| `minimal-mode`      | Compact rendering for built-in tools: collapsed output shows only the call + a one-line summary (e.g. `grep → N matches`); `Ctrl+O` expands.                           |
-| `custom-header`     | Compact startup header with pix branding, pi version, and key shortcuts; `/builtin-header` restores the default.                                                       |
-| `preset`            | Named model/thinking/tools/instructions configs from `presets.json`: `/preset`, `Ctrl+Shift+U`, or `--preset`.                                                         |
-| `charts`            | Native inline `chart` and `diagram` tools (TypeScript, zero deps): Unicode bar/line/scatter/histogram/sparkline plots plus architecture/flow/tree diagrams.            |
+| Extension                                              | What it does                                                                                                                                                           |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`notify`](extensions/notify.ts)                       | Desktop notification (macOS + Linux) when the agent finishes a task, with outcome, duration, files changed, and cost. Optional `notifyOnStart` config.                 |
+| [`footer`](extensions/footer.ts)                       | Custom TUI footer: model + thinking level, context-usage bar, token/cost totals, git branch, and a dirty indicator (⚑).                                                |
+| [`permission-gate`](extensions/permission-gate.ts)     | Blocks catastrophic bash (`rm -rf /`, `mkfs`) and confirms risky commands (`sudo`, force push, `rm -rf`, `git reset --hard`, …). Fails closed in non-interactive mode. |
+| [`protected-paths`](extensions/protected-paths.ts)     | Blocks `write`/`edit` to sensitive paths (`.env`, `*.key`, `node_modules/`, `.git/`, `.ssh/`, …).                                                                      |
+| [`todo`](extensions/todo.ts)                           | Persistent todo list: LLM-managed `todo` tool, widget above the editor, `/todos` toggle.                                                                               |
+| [`session-name`](extensions/session-name.ts)           | Auto-names sessions from their first user message (stopword-aware). `/rename [name]` to override.                                                                      |
+| [`plan-mode`](extensions/plan-mode.ts)                 | Read-only exploration + plan/execute: `/plan` (or `Ctrl+Alt+P`) disables write tools and restricts bash; parses `Plan:` steps, tracks `[DONE:n]` progress in a widget. |
+| [`handoff`](extensions/handoff.ts)                     | `/handoff <goal>` distills the current branch into a self-contained prompt, lets you edit it, and opens a new session pre-filled with it.                              |
+| [`bookmark`](extensions/bookmark.ts)                   | `/bookmark [label]` / `/unbookmark` label session entries for `/tree` navigation.                                                                                      |
+| [`interactive-shell`](extensions/interactive-shell.ts) | Runs interactive commands (`!vim`, `!git rebase -i`, `!htop`, …) with full terminal access via the `!` prefix.                                                         |
+| [`summarize`](extensions/summarize.ts)                 | `/summarize` renders a conversation summary in a scrollable Markdown overlay.                                                                                          |
+| [`titlebar-spinner`](extensions/titlebar-spinner.ts)   | Braille spinner in the terminal title while the agent works; resets to `π - session - dir` when done.                                                                  |
+| [`minimal-mode`](extensions/minimal-mode.ts)           | Compact rendering for built-in tools: collapsed output shows only the call + a one-line summary (e.g. `grep → N matches`); `Ctrl+O` expands.                           |
+| [`custom-header`](extensions/custom-header.ts)         | Compact startup header with pix branding, pi version, and key shortcuts; `/builtin-header` restores the default.                                                       |
+| [`preset`](extensions/preset.ts)                       | Named model/thinking/tools/instructions configs from `presets.json`: `/preset`, `Ctrl+Shift+U`, or `--preset`.                                                         |
+| [`charts`](extensions/charts.ts)                       | Native inline `chart` and `diagram` tools (TypeScript, zero deps): Unicode bar/line/scatter/histogram/sparkline plots plus architecture/flow/tree diagrams.            |
 
 ### Skills (`skills/`)
 
-- **`conventional-commits`** — Conventional Commits rules plus a `validate.sh` linter. Auto-loads when committing; force with `/skill:conventional-commits`.
-- **`api-design`** — API design principles + review checklist (REST, function signatures, schemas). Auto-loads when designing or reviewing interfaces.
-- **`git-rebase`** — interactive rebase workflow (squash/reword/reorder/drop) for a clean, Conventional Commits-compliant history.
-- **`testing`** — TDD red-green-refactor + coverage guidance: happy path, edge cases, boundaries, and error paths.
-- **`debugging`** — systematic bug workflow: reproduce → locate → hypothesize → confirm → fix → verify.
-- **`performance`** — measure-first optimization: profile, fix the bottleneck, re-measure, and guard with benchmarks.
-- **`ascii-art`** — ASCII/Unicode art: text banners, image-to-ASCII, boxes, dividers, and speech bubbles.
-- **`diagram-maker`** — SVG/HTML and Excalidraw diagrams for concepts, architecture, flows, and whiteboards (from openclaw, MIT).
+| Skill                                                          | What it does                                                                                                                                    |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`conventional-commits`](skills/conventional-commits/SKILL.md) | Conventional Commits rules plus a `validate.sh` linter. Auto-loads when committing; force with `/skill:conventional-commits`.                   |
+| [`api-design`](skills/api-design/SKILL.md)                     | API design principles + review checklist (REST, function signatures, schemas). Auto-loads when designing or reviewing interfaces.               |
+| [`git-rebase`](skills/git-rebase/SKILL.md)                     | Interactive rebase workflow (squash/reword/reorder/drop) for a clean, Conventional Commits-compliant history.                                   |
+| [`testing`](skills/testing/SKILL.md)                           | TDD red-green-refactor + coverage guidance: happy path, edge cases, boundaries, and error paths.                                                |
+| [`debugging`](skills/debugging/SKILL.md)                       | Systematic bug workflow: reproduce → locate → hypothesize → confirm → fix → verify.                                                             |
+| [`performance`](skills/performance/SKILL.md)                   | Measure-first optimization: profile, fix the bottleneck, re-measure, and guard with benchmarks.                                                 |
+| [`ascii-art`](skills/ascii-art/SKILL.md)                       | ASCII/Unicode art: text banners, image-to-ASCII, boxes, dividers, and speech bubbles.                                                           |
+| [`diagram-maker`](skills/diagram-maker/SKILL.md)               | SVG/HTML and Excalidraw diagrams for concepts, architecture, flows, and whiteboards (from openclaw, MIT).                                       |
+| [`cartographer`](skills/cartographer/SKILL.md)                 | Interactive isometric architecture map of a codebase as a self-contained HTML page (blocks sized by line count, colored zones, animated edges). |
 
 ### Prompts (`prompts/`)
 
-- **`/commit`** — one-command workflow: stage changes, write a Conventional Commits message, validate it, and commit (local only).
-- **`/review`** — review pending changes for bugs, security issues, error-handling gaps, and missing tests.
-- **`/plan`** — produce a numbered implementation plan under a `Plan:` header (feeds into `plan-mode`).
-- **`/explain`** — explain a file, function, or subsystem: architecture, data flow, and gotchas.
-- **`/debug`** — structured bug workflow: reproduce → diagnose → fix → verify.
-- **`/refactor`** — refactor while preserving behavior, in small test-green steps.
-- **`/security`** — security audit of the current changes.
-- **`/docs`** — write or refresh documentation for code.
-- **`/pr`** — generate a pull request title and description from the current changes.
+| Prompt                             | What it does                                                                                                     |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| [`/commit`](prompts/commit.md)     | One-command workflow: stage changes, write a Conventional Commits message, validate it, and commit (local only). |
+| [`/review`](prompts/review.md)     | Review pending changes for bugs, security issues, error-handling gaps, and missing tests.                        |
+| [`/plan`](prompts/plan.md)         | Produce a numbered implementation plan under a `Plan:` header (feeds into `plan-mode`).                          |
+| [`/explain`](prompts/explain.md)   | Explain a file, function, or subsystem: architecture, data flow, and gotchas.                                    |
+| [`/debug`](prompts/debug.md)       | Structured bug workflow: reproduce → diagnose → fix → verify.                                                    |
+| [`/refactor`](prompts/refactor.md) | Refactor while preserving behavior, in small test-green steps.                                                   |
+| [`/security`](prompts/security.md) | Security audit of the current changes.                                                                           |
+| [`/docs`](prompts/docs.md)         | Write or refresh documentation for code.                                                                         |
+| [`/pr`](prompts/pr.md)             | Generate a pull request title and description from the current changes.                                          |
 
 ### Themes (`themes/`)
 
-- **`kanagawa-wave`** — the [Kanagawa](https://github.com/rebelot/kanagawa.nvim) Wave palette. Select via `/settings` → Theme.
+| Theme                                        | What it does                                                                                           |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| [`kanagawa-wave`](themes/kanagawa-wave.json) | The [Kanagawa](https://github.com/rebelot/kanagawa.nvim) Wave palette. Select via `/settings` → Theme. |
 
 ### Keybindings (`config/`)
 
-Vim-style keybindings ship as `config/keybindings.vim.json` (pi loads keybindings from `~/.pi/agent/keybindings.json`, not from packages). To use them:
+Vim-style keybindings ship as [`config/keybindings.vim.json`](config/keybindings.vim.json) (pi loads keybindings from `~/.pi/agent/keybindings.json`, not from packages). To use them:
 
 ```bash
 cp config/keybindings.vim.json ~/.pi/agent/keybindings.json
