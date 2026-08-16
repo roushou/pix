@@ -7,9 +7,9 @@
  * run that just finished:
  *
  *   title    — session name (or project dir)
- *   subtitle — outcome (Done / Done with errors / Failed / Aborted)
- *   body     — duration, files changed, tool count, cost, context %, and a
- *              one-line excerpt of the final assistant message
+ *   subtitle — outcome + duration (e.g. "✓ Done · 3m 12s")
+ *   body     — one metrics line (files, tools, cost, context %), then the
+ *              final assistant message as a one-line excerpt on its own line
  *
  * The same summary is also shown in the TUI footer via `setStatus` until the
  * next run starts.
@@ -299,11 +299,6 @@ function assistantText(message: AssistantMessage): string {
     .trim();
 }
 
-function relPath(cwd: string, path: string): string {
-  if (path.startsWith(`${cwd}/`)) return path.slice(cwd.length + 1);
-  return basename(path);
-}
-
 function titleFor(pi: ExtensionAPI, cwd: string): string {
   return pi.getSessionName() ?? basename(cwd);
 }
@@ -385,31 +380,6 @@ export default function (pi: ExtensionAPI) {
     };
 
     const duration = formatDuration(Date.now() - run.startMs);
-    const changed = run.filesChanged.size;
-
-    const parts: string[] = [duration];
-    if (changed > 0) {
-      const names = cfg.mode === "rich" ? listFiles(run, ctx.cwd) : "";
-      parts.push(`${changed} file${changed === 1 ? "" : "s"} changed${names ? ` (${names})` : ""}`);
-    }
-    if (run.toolCount > 0) {
-      parts.push(`${run.toolCount} tool${run.toolCount === 1 ? "" : "s"}`);
-    }
-    if (cfg.mode === "rich") {
-      if (delta.cost > 0) parts.push(formatCost(delta.cost));
-      else if (delta.input + delta.output > 0) {
-        parts.push(`↑${fmtCount(delta.input)} ↓${fmtCount(delta.output)}`);
-      }
-      const usage = ctx.getContextUsage();
-      if (usage?.percent != null) parts.push(`ctx ${Math.round(usage.percent)}%`);
-      if (run.errors > 0) {
-        const tools = [...run.errorTools].slice(0, 2).join(", ");
-        parts.push(
-          `${run.errors} error${run.errors === 1 ? "" : "s"}${tools ? ` (${tools})` : ""}`,
-        );
-      }
-    }
-    const summary = parts.join(" · ");
 
     // Determine outcome from the final assistant stop reason, falling back to
     // whether any tool errored.
@@ -418,19 +388,22 @@ export default function (pi: ExtensionAPI) {
     else if (run.stopReason === "error") outcome = "error";
     else if (run.errors > 0) outcome = "warning";
 
-    const meaningful = run.toolCount > 0 || run.excerpt.length > 0 || run.errors > 0;
     const out = OUTCOMES[outcome];
+    const metrics = metricsLine(cfg, run, delta, ctx);
+    const summary = [duration, metrics].filter(Boolean).join(" · ");
 
     if (ctx.hasUI) ctx.ui.setStatus(STATUS_KEY, `${out.mark} ${summary}`);
 
+    const meaningful = run.toolCount > 0 || run.excerpt.length > 0 || run.errors > 0;
     if (meaningful) {
       const excerpt =
         cfg.mode === "rich" && run.excerpt ? truncate(run.excerpt, cfg.excerptLength) : "";
-      const body = excerpt ? `${summary}\n${excerpt}` : summary;
+      // Metrics on one line, the final message excerpt on its own line.
+      const body = [metrics, excerpt].filter(Boolean).join("\n") || duration;
 
       void sendNotification({
         title: titleFor(pi, ctx.cwd),
-        subtitle: out.label,
+        subtitle: `${out.mark} ${out.label} · ${duration}`,
         body,
         sound: cfg.sound ? out.sound : "",
         urgency: out.urgency,
@@ -441,9 +414,32 @@ export default function (pi: ExtensionAPI) {
     run = null;
   });
 
-  function listFiles(state: Run, cwd: string): string {
-    const names = [...state.filesChanged].map((p) => relPath(cwd, p));
-    if (names.length <= 2) return names.join(", ");
-    return `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
+  function metricsLine(
+    cfg: NotifyConfig,
+    state: Run,
+    delta: Totals,
+    ctx: ExtensionContext,
+  ): string {
+    const parts: string[] = [];
+    const changed = state.filesChanged.size;
+    if (changed > 0) parts.push(`${changed} file${changed === 1 ? "" : "s"} changed`);
+    if (state.toolCount > 0) {
+      parts.push(`${state.toolCount} tool${state.toolCount === 1 ? "" : "s"}`);
+    }
+    if (cfg.mode === "rich") {
+      if (delta.cost > 0) parts.push(formatCost(delta.cost));
+      else if (delta.input + delta.output > 0) {
+        parts.push(`${fmtCount(delta.input + delta.output)} tokens`);
+      }
+      const usage = ctx.getContextUsage();
+      if (usage?.percent != null) parts.push(`ctx ${Math.round(usage.percent)}%`);
+      if (state.errors > 0) {
+        const tools = [...state.errorTools].slice(0, 2).join(", ");
+        parts.push(
+          `${state.errors} error${state.errors === 1 ? "" : "s"}${tools ? ` (${tools})` : ""}`,
+        );
+      }
+    }
+    return parts.join(" · ");
   }
 }
