@@ -43,6 +43,7 @@ Then `/reload` (or restart pi). Uninstall with `pi remove <source>`.
 | [`subagent`](extensions/subagent.ts)                   | `subagent` tool: delegate tasks to specialized agents (single / parallel / chain) in isolated `pi` processes. Ships `scout`, `planner`, `reviewer`, `worker` agents.   |
 | [`web`](extensions/web.ts)                             | `web_fetch` + `web_search` tools: fetch URLs (HTML→text, JSON pretty-printed), search via Tavily/Brave/Serper or DuckDuckGo fallback.                                  |
 | [`auto-format`](extensions/auto-format.ts)             | Runs each project's own formatter/linter after `write`/`edit` (biome, prettier, dprint, oxfmt, oxlint, eslint, ruff, black, gofmt, rustfmt).                           |
+| [`dirty-repo-guard`](extensions/dirty-repo-guard.ts)   | Confirms before `/new`, `/resume`, `/fork`, `/clone` when the tree has uncommitted changes; warns the agent at start so it keeps its edits separate.                   |
 
 ### Skills (`skills/`)
 
