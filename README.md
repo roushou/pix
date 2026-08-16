@@ -40,6 +40,7 @@ Then `/reload` (or restart pi). Uninstall with `pi remove <source>`.
 | [`custom-header`](extensions/custom-header.ts)         | Compact startup header with pix branding, pi version, and key shortcuts; `/builtin-header` restores the default.                                                       |
 | [`preset`](extensions/preset.ts)                       | Named model/thinking/tools/instructions configs from `presets.json`: `/preset`, `Ctrl+Shift+U`, or `--preset`.                                                         |
 | [`charts`](extensions/charts.ts)                       | Native inline `chart` and `diagram` tools (TypeScript, zero deps): Unicode bar/line/scatter/histogram/sparkline plots plus architecture/flow/tree diagrams.            |
+| [`subagent`](extensions/subagent.ts)                   | `subagent` tool: delegate tasks to specialized agents (single / parallel / chain) in isolated `pi` processes. Ships `scout`, `planner`, `reviewer`, `worker` agents.   |
 
 ### Skills (`skills/`)
 
@@ -57,17 +58,33 @@ Then `/reload` (or restart pi). Uninstall with `pi remove <source>`.
 
 ### Prompts (`prompts/`)
 
-| Prompt                             | What it does                                                                                                     |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| [`/commit`](prompts/commit.md)     | One-command workflow: stage changes, write a Conventional Commits message, validate it, and commit (local only). |
-| [`/review`](prompts/review.md)     | Review pending changes for bugs, security issues, error-handling gaps, and missing tests.                        |
-| [`/plan`](prompts/plan.md)         | Produce a numbered implementation plan under a `Plan:` header (feeds into `plan-mode`).                          |
-| [`/explain`](prompts/explain.md)   | Explain a file, function, or subsystem: architecture, data flow, and gotchas.                                    |
-| [`/debug`](prompts/debug.md)       | Structured bug workflow: reproduce → diagnose → fix → verify.                                                    |
-| [`/refactor`](prompts/refactor.md) | Refactor while preserving behavior, in small test-green steps.                                                   |
-| [`/security`](prompts/security.md) | Security audit of the current changes.                                                                           |
-| [`/docs`](prompts/docs.md)         | Write or refresh documentation for code.                                                                         |
-| [`/pr`](prompts/pr.md)             | Generate a pull request title and description from the current changes.                                          |
+| Prompt                                                     | What it does                                                                                                     |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| [`/commit`](prompts/commit.md)                             | One-command workflow: stage changes, write a Conventional Commits message, validate it, and commit (local only). |
+| [`/review`](prompts/review.md)                             | Review pending changes for bugs, security issues, error-handling gaps, and missing tests.                        |
+| [`/plan`](prompts/plan.md)                                 | Produce a numbered implementation plan under a `Plan:` header (feeds into `plan-mode`).                          |
+| [`/explain`](prompts/explain.md)                           | Explain a file, function, or subsystem: architecture, data flow, and gotchas.                                    |
+| [`/debug`](prompts/debug.md)                               | Structured bug workflow: reproduce → diagnose → fix → verify.                                                    |
+| [`/refactor`](prompts/refactor.md)                         | Refactor while preserving behavior, in small test-green steps.                                                   |
+| [`/security`](prompts/security.md)                         | Security audit of the current changes.                                                                           |
+| [`/docs`](prompts/docs.md)                                 | Write or refresh documentation for code.                                                                         |
+| [`/pr`](prompts/pr.md)                                     | Generate a pull request title and description from the current changes.                                          |
+| [`/implement`](prompts/implement.md)                       | Full workflow via `subagent` chain: scout → planner → worker.                                                    |
+| [`/scout-and-plan`](prompts/scout-and-plan.md)             | `subagent` chain: scout → planner, returns a plan without implementing.                                          |
+| [`/implement-and-review`](prompts/implement-and-review.md) | `subagent` chain: worker → reviewer → worker (implement, review, apply feedback).                                |
+
+### Agents (`agents/`)
+
+Agent definitions used by the `subagent` tool — markdown files with YAML frontmatter (`name`, `description`, optional `tools` and `model`) plus a system-prompt body.
+
+| Agent                            | Purpose                                           |
+| -------------------------------- | ------------------------------------------------- |
+| [`scout`](agents/scout.md)       | Fast codebase recon → compressed handoff context. |
+| [`planner`](agents/planner.md)   | Read-only implementation planning.                |
+| [`reviewer`](agents/reviewer.md) | Code review for quality/security.                 |
+| [`worker`](agents/worker.md)     | General-purpose implementation.                   |
+
+These ship bundled with the package and work out of the box. The tool also discovers `~/.pi/agent/agents/*.md` (user-level) and `.pi/agents/*.md` (project-level, requires `agentScope: "both"`). User/project agents override bundled ones with the same name. Add `model: <id>` to any agent's frontmatter to pin a model (default: inherit the session's active model).
 
 ### Themes (`themes/`)
 
