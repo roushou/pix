@@ -41,6 +41,7 @@ Then `/reload` (or restart pi). Uninstall with `pi remove <source>`.
 | [`preset`](extensions/preset.ts)                       | Named model/thinking/tools/instructions configs from `presets.json`: `/preset`, `Ctrl+Shift+U`, or `--preset`.                                                         |
 | [`charts`](extensions/charts.ts)                       | Native inline `chart` and `diagram` tools (TypeScript, zero deps): Unicode bar/line/scatter/histogram/sparkline plots plus architecture/flow/tree diagrams.            |
 | [`subagent`](extensions/subagent.ts)                   | `subagent` tool: delegate tasks to specialized agents (single / parallel / chain) in isolated `pi` processes. Ships `scout`, `planner`, `reviewer`, `worker` agents.   |
+| [`web`](extensions/web.ts)                             | `web_fetch` + `web_search` tools: fetch URLs (HTML→text, JSON pretty-printed), search via Tavily/Brave/Serper or DuckDuckGo fallback.                                  |
 
 ### Skills (`skills/`)
 
