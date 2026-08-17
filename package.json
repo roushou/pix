@@ -21,7 +21,8 @@
     "format": "oxfmt --write",
     "format:check": "oxfmt --check",
     "typecheck": "tsc --noEmit",
-    "check": "oxlint --deny-warnings && oxfmt --check && tsc --noEmit"
+    "test": "bun test",
+    "check": "oxlint --deny-warnings && oxfmt --check && tsc --noEmit && bun test"
   },
   "devDependencies": {
     "@types/bun": "latest",
