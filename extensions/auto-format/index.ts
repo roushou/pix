@@ -45,8 +45,6 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import {
-  CONFIG_DIR_NAME,
-  getAgentDir,
   isEditToolResult,
   isWriteToolResult,
   withFileMutationQueue,
@@ -55,6 +53,7 @@ import {
   type ExecResult,
 } from "@earendil-works/pi-coding-agent";
 import { PROJECT_ROOT_MARKERS, TOOLCHAINS, type ToolchainSpec } from "./toolchains.ts";
+import { loadExtensionSettings } from "../shared/settings.ts";
 
 const MAX_FILE_BYTES = 1_000_000;
 const MAX_LINT_CHARS = 2_000;
@@ -78,19 +77,7 @@ const DEFAULT_CONFIG: AutoFormatConfig = {
 };
 
 function loadConfig(cwd: string): AutoFormatConfig {
-  const paths = [join(getAgentDir(), "settings.json"), join(cwd, CONFIG_DIR_NAME, "settings.json")];
-  let merged: Record<string, unknown> = {};
-
-  for (const path of paths) {
-    try {
-      if (!existsSync(path)) continue;
-      const raw = readFileSync(path, "utf8");
-      const parsed = JSON.parse(raw) as { autoFormat?: Record<string, unknown> };
-      if (parsed.autoFormat) Object.assign(merged, parsed.autoFormat);
-    } catch {
-      // Settings are best-effort; fall back to defaults on any parse error.
-    }
-  }
+  const merged = loadExtensionSettings(cwd, "autoFormat");
 
   return {
     enabled: typeof merged.enabled === "boolean" ? merged.enabled : DEFAULT_CONFIG.enabled,

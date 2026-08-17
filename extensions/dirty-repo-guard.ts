@@ -26,14 +26,8 @@
  *   }
  */
 
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import {
-  CONFIG_DIR_NAME,
-  getAgentDir,
-  type ExtensionAPI,
-  type ExtensionContext,
-} from "@earendil-works/pi-coding-agent";
+import { type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { loadExtensionSettings } from "./shared/settings.ts";
 
 interface DirtyRepoGuardConfig {
   enabled: boolean;
@@ -52,19 +46,7 @@ const DEFAULT_CONFIG: DirtyRepoGuardConfig = {
 };
 
 function loadConfig(cwd: string): DirtyRepoGuardConfig {
-  const paths = [join(getAgentDir(), "settings.json"), join(cwd, CONFIG_DIR_NAME, "settings.json")];
-  let merged: Record<string, unknown> = {};
-
-  for (const path of paths) {
-    try {
-      if (!existsSync(path)) continue;
-      const raw = readFileSync(path, "utf8");
-      const parsed = JSON.parse(raw) as { dirtyRepoGuard?: Record<string, unknown> };
-      if (parsed.dirtyRepoGuard) Object.assign(merged, parsed.dirtyRepoGuard);
-    } catch {
-      // Settings are best-effort; fall back to defaults on any parse error.
-    }
-  }
+  const merged = loadExtensionSettings(cwd, "dirtyRepoGuard");
 
   return {
     enabled: typeof merged.enabled === "boolean" ? merged.enabled : DEFAULT_CONFIG.enabled,

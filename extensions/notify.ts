@@ -36,15 +36,10 @@
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { basename, join } from "node:path";
-import { existsSync, readFileSync } from "node:fs";
+import { basename } from "node:path";
 import type { AssistantMessage, TextContent } from "@earendil-works/pi-ai";
-import {
-  CONFIG_DIR_NAME,
-  getAgentDir,
-  type ExtensionAPI,
-  type ExtensionContext,
-} from "@earendil-works/pi-coding-agent";
+import { type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { loadExtensionSettings } from "./shared/settings.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -65,19 +60,7 @@ const DEFAULT_CONFIG: NotifyConfig = {
 };
 
 function loadConfig(cwd: string): NotifyConfig {
-  const paths = [join(getAgentDir(), "settings.json"), join(cwd, CONFIG_DIR_NAME, "settings.json")];
-  let merged: Record<string, unknown> = {};
-
-  for (const path of paths) {
-    try {
-      if (!existsSync(path)) continue;
-      const raw = readFileSync(path, "utf8");
-      const parsed = JSON.parse(raw) as { notify?: Record<string, unknown> };
-      if (parsed.notify) Object.assign(merged, parsed.notify);
-    } catch {
-      // Settings are best-effort; fall back to defaults on any parse error.
-    }
-  }
+  const merged = loadExtensionSettings(cwd, "notify");
 
   return {
     mode: merged.mode === "compact" ? "compact" : DEFAULT_CONFIG.mode,

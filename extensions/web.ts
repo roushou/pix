@@ -27,15 +27,9 @@
  *   }
  */
 
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import {
-  CONFIG_DIR_NAME,
-  getAgentDir,
-  type ExtensionAPI,
-  type ExtensionContext,
-} from "@earendil-works/pi-coding-agent";
+import { type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { loadExtensionSettings } from "./shared/settings.ts";
 
 const MAX_OUTPUT_BYTES = 50 * 1024;
 const MAX_OUTPUT_LINES = 2000;
@@ -60,19 +54,7 @@ const DEFAULT_CONFIG: WebConfig = {
 };
 
 function loadConfig(cwd: string): WebConfig {
-  const paths = [join(getAgentDir(), "settings.json"), join(cwd, CONFIG_DIR_NAME, "settings.json")];
-  let merged: Record<string, unknown> = {};
-
-  for (const path of paths) {
-    try {
-      if (!existsSync(path)) continue;
-      const raw = readFileSync(path, "utf8");
-      const parsed = JSON.parse(raw) as { web?: Record<string, unknown> };
-      if (parsed.web) Object.assign(merged, parsed.web);
-    } catch {
-      // Settings are best-effort; fall back to defaults on any parse error.
-    }
-  }
+  const merged = loadExtensionSettings(cwd, "web");
 
   const provider = merged.searchProvider;
   const isProvider =
