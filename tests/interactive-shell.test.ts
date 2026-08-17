@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import {
   DEFAULT_INTERACTIVE_COMMANDS,
   INTERACTIVE_COMMAND_GROUPS,
@@ -102,4 +102,24 @@ describe("matching", () => {
   test("plain command does not match", () => expect(isInteractiveCommand("ls -la")).toBe(false));
   test("vimdiff does not match vim (needs word boundary)", () =>
     expect(isInteractiveCommand("vimdiff a b")).toBe(false));
+});
+
+describe("env specs", () => {
+  afterEach(() => {
+    delete process.env.INTERACTIVE_COMMANDS;
+    delete process.env.INTERACTIVE_EXCLUDE;
+  });
+
+  test("INTERACTIVE_COMMANDS adds commands", () => {
+    process.env.INTERACTIVE_COMMANDS = "mycmd, othercmd";
+    expect(isInteractiveCommand("mycmd arg")).toBe(true);
+    expect(isInteractiveCommand("othercmd")).toBe(true);
+  });
+
+  test("INTERACTIVE_EXCLUDE removes defaults case-insensitively", () => {
+    process.env.INTERACTIVE_EXCLUDE = "VIM,less";
+    expect(isInteractiveCommand("vim")).toBe(false);
+    expect(isInteractiveCommand("cat x | less")).toBe(false);
+    expect(isInteractiveCommand("htop")).toBe(true);
+  });
 });

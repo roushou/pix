@@ -5,8 +5,12 @@
  * Pure data, no logic: the engine in index.ts interprets this file. Commands
  * are grouped by category so the list stays scannable; the engine flattens
  * the groups into the matching set. Order within the file has no semantic
- * meaning.
+ * meaning. The env specs (see shared/config.ts) let users add commands or
+ * exclude defaults per process.
  */
+
+import type { ConfigSpec } from "../shared/config.ts";
+import { splitComma } from "../shared/config.ts";
 
 export interface CommandGroup {
   group: string;
@@ -61,3 +65,21 @@ export const INTERACTIVE_COMMAND_GROUPS: CommandGroup[] = [
 export const DEFAULT_INTERACTIVE_COMMANDS: string[] = INTERACTIVE_COMMAND_GROUPS.flatMap(
   (g) => g.commands,
 );
+
+/** Env additions (INTERACTIVE_COMMANDS, comma-separated) on top of the default. */
+export const ADDITIONAL_COMMANDS_SPEC: ConfigSpec<string[]> = {
+  key: "INTERACTIVE_COMMANDS",
+  channel: "env",
+  merge: "union",
+  default: [],
+  parse: splitComma,
+};
+
+/** Env exclusions (INTERACTIVE_EXCLUDE, comma-separated), matched case-insensitively. */
+export const EXCLUDE_COMMANDS_SPEC: ConfigSpec<string[]> = {
+  key: "INTERACTIVE_EXCLUDE",
+  channel: "env",
+  merge: "union",
+  default: [],
+  parse: (raw) => splitComma(raw).map((s) => s.toLowerCase()),
+};

@@ -14,16 +14,16 @@
 
 import { spawnSync } from "node:child_process";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { DEFAULT_INTERACTIVE_COMMANDS } from "./commands.ts";
+import {
+  ADDITIONAL_COMMANDS_SPEC,
+  DEFAULT_INTERACTIVE_COMMANDS,
+  EXCLUDE_COMMANDS_SPEC,
+} from "./commands.ts";
+import { resolveSpec } from "../shared/config.ts";
 
 function getInteractiveCommands(): string[] {
-  const additional =
-    process.env.INTERACTIVE_COMMANDS?.split(",")
-      .map((s) => s.trim())
-      .filter(Boolean) ?? [];
-  const excluded = new Set(
-    process.env.INTERACTIVE_EXCLUDE?.split(",").map((s) => s.trim().toLowerCase()) ?? [],
-  );
+  const additional = resolveSpec(ADDITIONAL_COMMANDS_SPEC, {}, process.env);
+  const excluded = new Set(resolveSpec(EXCLUDE_COMMANDS_SPEC, {}, process.env));
   return [...DEFAULT_INTERACTIVE_COMMANDS, ...additional].filter(
     (cmd) => !excluded.has(cmd.toLowerCase()),
   );

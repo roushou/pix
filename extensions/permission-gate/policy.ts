@@ -38,6 +38,31 @@ export const REMOTE_TRIGGERS = ["ssh", "scp", "sftp", "docker", "podman"];
  */
 export const NOTIFY_ON_CONFIRM: "always" | "off" = "always";
 
+/**
+ * Where each permission-gate spec lives and how it merges (see
+ * shared/config.ts). Only an explicit "off" disables notifications;
+ * anything else falls back to the default.
+ */
+export const NOTIFY_SPEC: ConfigSpec<"always" | "off"> = {
+  key: "notifyOnConfirm",
+  channel: "settings",
+  merge: "override",
+  default: NOTIFY_ON_CONFIRM,
+  parse: (raw) => (raw === "off" ? "off" : NOTIFY_ON_CONFIRM),
+};
+
+/** Extra scratch dirs from the environment (colon-separated, `~` allowed). */
+export const SCRATCH_DIRS_SPEC: ConfigSpec<string[]> = {
+  key: "PI_SCRATCH_DIRS",
+  channel: "env",
+  merge: "union",
+  default: SCRATCH_DIRS,
+  parse: splitColon,
+};
+
+import type { ConfigSpec } from "../shared/config.ts";
+import { splitColon } from "../shared/config.ts";
+
 export interface Rule {
   name: string;
   pattern: RegExp;

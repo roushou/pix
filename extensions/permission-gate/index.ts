@@ -49,13 +49,14 @@ import { isAbsolute, resolve, sep } from "node:path";
 import { realpathSync } from "node:fs";
 import {
   EVAL_TRIGGERS,
-  NOTIFY_ON_CONFIRM,
+  NOTIFY_SPEC,
   REMOTE_TRIGGERS,
   RULES,
-  SCRATCH_DIRS,
+  SCRATCH_DIRS_SPEC,
   type Rule,
 } from "./policy.ts";
 import { sendNotification } from "../notify.ts";
+import { resolveSpec } from "../shared/config.ts";
 import { loadExtensionSettings } from "../shared/settings.ts";
 
 // ---------------------------------------------------------------------------
@@ -83,11 +84,8 @@ function addScratchRoot(raw: string): void {
   }
 }
 
-for (const dir of SCRATCH_DIRS) addScratchRoot(dir);
+for (const dir of resolveSpec(SCRATCH_DIRS_SPEC, {}, process.env)) addScratchRoot(dir);
 addScratchRoot(tmpdir());
-for (const dir of (process.env.PI_SCRATCH_DIRS ?? "").split(":")) {
-  if (dir.trim()) addScratchRoot(dir.trim());
-}
 
 /** True when `candidate` (relative to `base`) is inside a scratch directory. */
 export function isScratchPath(candidate: string, base: string): boolean {
@@ -354,15 +352,11 @@ function notifyBody(command: string): string {
 }
 
 /**
- * Resolve the notify mode from the `permissionGate` settings section.
- * Only an explicit "off" disables notifications; anything else (absent,
- * "always", unknown) uses the policy default.
+ * Resolve the notify mode from the `permissionGate` settings section via the
+ * declarative NOTIFY_SPEC (see policy.ts / shared/config.ts).
  */
-export function resolveNotifyOnConfirm(
-  settings: Record<string, unknown>,
-  fallback: "always" | "off" = NOTIFY_ON_CONFIRM,
-): "always" | "off" {
-  return settings.notifyOnConfirm === "off" ? "off" : fallback;
+export function resolveNotifyOnConfirm(settings: Record<string, unknown>): "always" | "off" {
+  return resolveSpec(NOTIFY_SPEC, settings, process.env);
 }
 
 export default function (pi: ExtensionAPI) {
