@@ -29,6 +29,13 @@ export const EVAL_TRIGGERS = ["-c", "eval", "sudo"];
 /** Segments starting with these run their quoted args elsewhere (`ssh host '...'`). */
 export const REMOTE_TRIGGERS = ["ssh", "scp", "sftp", "docker", "podman"];
 
+/**
+ * When the gate is about to prompt the user, also fire a desktop
+ * notification ("always") or keep it purely in-terminal ("off"). The
+ * notification reuses the platform plumbing from the notify extension.
+ */
+export const NOTIFY_ON_CONFIRM: "always" | "off" = "always";
+
 export interface Rule {
   name: string;
   pattern: RegExp;

@@ -211,7 +211,7 @@ function notifyTerminal(title: string, body: string): void {
   }
 }
 
-interface NotificationPayload {
+export interface NotificationPayload {
   title: string;
   subtitle: string;
   body: string;
@@ -242,7 +242,7 @@ async function notifyLinux(payload: NotificationPayload): Promise<void> {
   notifyTerminal(title, payload.subtitle ? `${payload.subtitle} · ${body}` : body);
 }
 
-async function sendNotification(payload: NotificationPayload): Promise<void> {
+export async function sendNotification(payload: NotificationPayload): Promise<void> {
   try {
     if (process.platform === "darwin") {
       await notifyMacOS(payload);

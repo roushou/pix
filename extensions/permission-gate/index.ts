@@ -34,7 +34,15 @@ import { isToolCallEventType, type ExtensionAPI } from "@earendil-works/pi-codin
 import { homedir, tmpdir } from "node:os";
 import { isAbsolute, resolve, sep } from "node:path";
 import { realpathSync } from "node:fs";
-import { EVAL_TRIGGERS, REMOTE_TRIGGERS, RULES, SCRATCH_DIRS, type Rule } from "./policy.ts";
+import {
+  EVAL_TRIGGERS,
+  NOTIFY_ON_CONFIRM,
+  REMOTE_TRIGGERS,
+  RULES,
+  SCRATCH_DIRS,
+  type Rule,
+} from "./policy.ts";
+import { sendNotification } from "../notify.ts";
 
 // ---------------------------------------------------------------------------
 // Scratch directories
@@ -322,6 +330,15 @@ export function inScratchScope(rule: Rule, command: string, start: string): bool
   );
 }
 
+const NOTIFY_BODY_MAX = 140;
+
+/** One-line, truncated command for the notification body. */
+function notifyBody(command: string): string {
+  const oneLine = command.replace(/\s+/g, " ").trim();
+  if (oneLine.length <= NOTIFY_BODY_MAX) return oneLine;
+  return `${oneLine.slice(0, NOTIFY_BODY_MAX - 1).trimEnd()}…`;
+}
+
 export default function (pi: ExtensionAPI) {
   pi.on("tool_call", async (event, ctx) => {
     if (!isToolCallEventType("bash", event)) return;
@@ -351,6 +368,20 @@ export default function (pi: ExtensionAPI) {
         block: true,
         reason: `Blocked (${confirm.name}) — no UI available for confirmation`,
       };
+    }
+
+    // The user is about to be interrupted with a dialog — surface it as a
+    // desktop notification too, so it isn't missed when the terminal is not
+    // in focus. Best-effort and non-blocking.
+    if (NOTIFY_ON_CONFIRM !== "off") {
+      void sendNotification({
+        title: "Permission needed",
+        subtitle: confirm.name,
+        body: notifyBody(command),
+        sound: "Sosumi",
+        urgency: "critical",
+        icon: "dialog-question",
+      });
     }
 
     const ok = await ctx.ui.confirm(`⚠️ ${confirm.name}`, `Allow this command?\n\n  ${command}`);
