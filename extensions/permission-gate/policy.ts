@@ -30,9 +30,11 @@ export const EVAL_TRIGGERS = ["-c", "eval", "sudo"];
 export const REMOTE_TRIGGERS = ["ssh", "scp", "sftp", "docker", "podman"];
 
 /**
- * When the gate is about to prompt the user, also fire a desktop
- * notification ("always") or keep it purely in-terminal ("off"). The
- * notification reuses the platform plumbing from the notify extension.
+ * Default notification behavior when the gate is about to prompt the user:
+ * "always" fires a desktop notification, "off" keeps it purely in-terminal.
+ * Overridable per user/project via the `permissionGate.notifyOnConfirm` key
+ * in settings.json (global or project); this default applies when the key
+ * is absent.
  */
 export const NOTIFY_ON_CONFIRM: "always" | "off" = "always";
 

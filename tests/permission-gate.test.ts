@@ -4,8 +4,9 @@ import {
   isScratchPath,
   maskQuoted,
   pathArgs,
+  resolveNotifyOnConfirm,
 } from "../extensions/permission-gate/index.ts";
-import { RULES } from "../extensions/permission-gate/policy.ts";
+import { NOTIFY_ON_CONFIRM, RULES } from "../extensions/permission-gate/policy.ts";
 
 const PROJECT = "/Users/roushou/dev/proj";
 const rmRule = RULES.find((r) => r.name === "recursive rm")!;
@@ -149,4 +150,19 @@ describe("declarative policy shape", () => {
     expect(RULES.every((r) => typeof r.pattern === "object" && typeof r.name === "string")).toBe(
       true,
     ));
+});
+
+describe("notify-on-confirm resolution", () => {
+  test("absent setting uses the policy default", () => {
+    expect(resolveNotifyOnConfirm({})).toBe(NOTIFY_ON_CONFIRM);
+  });
+  test("'off' in settings disables notifications", () => {
+    expect(resolveNotifyOnConfirm({ notifyOnConfirm: "off" })).toBe("off");
+  });
+  test("'always' in settings keeps notifications", () => {
+    expect(resolveNotifyOnConfirm({ notifyOnConfirm: "always" })).toBe("always");
+  });
+  test("unknown value falls back to the default", () => {
+    expect(resolveNotifyOnConfirm({ notifyOnConfirm: "sometimes" })).toBe(NOTIFY_ON_CONFIRM);
+  });
 });

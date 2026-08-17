@@ -26,11 +26,24 @@
  * plus os.tmpdir() and extra dirs from the PI_SCRATCH_DIRS env var
  * (colon-separated, `~` allowed). Block rules are never waived.
  *
+ * Config (optional, best-effort) — read from `~/.pi/agent/settings.json` and
+ * `<project>/.pi/settings.json` under a `permissionGate` key:
+ *
+ *   {
+ *     "permissionGate": {
+ *       "notifyOnConfirm": "off"   // desktop notification before the dialog: "always" (default) | "off"
+ *     }
+ *   }
+ *
  * Blocking a tool call returns a reason that is surfaced to the model, so the
  * agent can explain and retry with a safer command.
  */
 
-import { isToolCallEventType, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import {
+  isToolCallEventType,
+  type ExtensionAPI,
+  type ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
 import { homedir, tmpdir } from "node:os";
 import { isAbsolute, resolve, sep } from "node:path";
 import { realpathSync } from "node:fs";
@@ -43,6 +56,7 @@ import {
   type Rule,
 } from "./policy.ts";
 import { sendNotification } from "../notify.ts";
+import { loadExtensionSettings } from "../shared/settings.ts";
 
 // ---------------------------------------------------------------------------
 // Scratch directories
@@ -339,7 +353,27 @@ function notifyBody(command: string): string {
   return `${oneLine.slice(0, NOTIFY_BODY_MAX - 1).trimEnd()}…`;
 }
 
+/**
+ * Resolve the notify mode from the `permissionGate` settings section.
+ * Only an explicit "off" disables notifications; anything else (absent,
+ * "always", unknown) uses the policy default.
+ */
+export function resolveNotifyOnConfirm(
+  settings: Record<string, unknown>,
+  fallback: "always" | "off" = NOTIFY_ON_CONFIRM,
+): "always" | "off" {
+  return settings.notifyOnConfirm === "off" ? "off" : fallback;
+}
+
 export default function (pi: ExtensionAPI) {
+  let notifyOnConfirm: "always" | "off" | undefined;
+
+  const shouldNotify = (ctx: ExtensionContext): boolean => {
+    if (notifyOnConfirm === undefined) {
+      notifyOnConfirm = resolveNotifyOnConfirm(loadExtensionSettings(ctx.cwd, "permissionGate"));
+    }
+    return notifyOnConfirm !== "off";
+  };
   pi.on("tool_call", async (event, ctx) => {
     if (!isToolCallEventType("bash", event)) return;
 
@@ -372,8 +406,9 @@ export default function (pi: ExtensionAPI) {
 
     // The user is about to be interrupted with a dialog — surface it as a
     // desktop notification too, so it isn't missed when the terminal is not
-    // in focus. Best-effort and non-blocking.
-    if (NOTIFY_ON_CONFIRM !== "off") {
+    // in focus. Best-effort and non-blocking. Behavior follows
+    // settings.json `permissionGate.notifyOnConfirm` ("always" | "off").
+    if (shouldNotify(ctx)) {
       void sendNotification({
         title: "Permission needed",
         subtitle: confirm.name,
