@@ -39,7 +39,8 @@
   "pi": {
     "extensions": [
       "./extensions/*.ts",
-      "./extensions/permission-gate"
+      "./extensions/permission-gate",
+      "./extensions/auto-format"
     ],
     "skills": [
       "./skills"

@@ -12,7 +12,10 @@
  * project already declares and has installed, so each repo keeps the style its
  * own maintainers expect.
  *
- * Supported toolchains:
+ * Supported toolchains are declared as data in toolchains.ts (name, config
+ * files, args template, priority). The engine here only interprets that
+ * table: adding a toolchain never touches engine code.
+ *
  *   - JS/TS/web: biome, prettier, dprint, oxfmt (format); oxlint, biome, eslint (lint)
  *   - Python:    ruff (format + lint), black (format)
  *   - Go:        gofmt (format; go.mod required)
@@ -51,6 +54,7 @@ import {
   type ExtensionContext,
   type ExecResult,
 } from "@earendil-works/pi-coding-agent";
+import { PROJECT_ROOT_MARKERS, TOOLCHAINS, type ToolchainSpec } from "./toolchains.ts";
 
 const MAX_FILE_BYTES = 1_000_000;
 const MAX_LINT_CHARS = 2_000;
@@ -58,11 +62,6 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 
 const IGNORE_DIRS =
   /(^|\/)(node_modules|\.git|dist|build|out|coverage|vendor|\.next|\.nuxt|target)(\/|$)/;
-
-const WEB_EXT = /\.(tsx?|jsx?|mjs|cjs|jsonc?|mdx?|css|scss|less|html|vue|svelte|ya?ml)$/i;
-const PY_EXT = /\.(py|pyi)$/i;
-const GO_EXT = /\.go$/i;
-const RS_EXT = /\.rs$/i;
 
 interface AutoFormatConfig {
   enabled: boolean;
@@ -120,10 +119,6 @@ interface Detected {
   lint: ToolCommand | null;
 }
 
-function hasAnyFile(root: string, names: string[]): boolean {
-  return names.some((n) => existsSync(join(root, n)));
-}
-
 function fileContains(root: string, name: string, regex: RegExp): boolean {
   try {
     return regex.test(readFileSync(join(root, name), "utf8"));
@@ -145,10 +140,9 @@ function packageJsonHasKey(root: string, key: string): boolean {
 }
 
 function findProjectRoot(start: string): string {
-  const markers = ["package.json", "pyproject.toml", "go.mod", "Cargo.toml", ".git"];
   let current = start;
   while (true) {
-    for (const marker of markers) {
+    for (const marker of PROJECT_ROOT_MARKERS) {
       if (existsSync(join(current, marker))) return current;
     }
     const parent = dirname(current);
@@ -162,127 +156,42 @@ function resolveLocalBin(root: string, name: string): string | null {
   return existsSync(bin) ? bin : null;
 }
 
-function prettierConfigured(root: string): boolean {
-  const files = [
-    ".prettierrc",
-    ".prettierrc.json",
-    ".prettierrc.yaml",
-    ".prettierrc.yml",
-    ".prettierrc.js",
-    ".prettierrc.cjs",
-    ".prettierrc.mjs",
-    ".prettierrc.toml",
-    "prettier.config.js",
-    "prettier.config.cjs",
-    "prettier.config.mjs",
-  ];
-  return hasAnyFile(root, files) || packageJsonHasKey(root, "prettier");
+/** True when the spec's config file(s), package.json key, or config section exist. */
+function isConfigured(root: string, spec: ToolchainSpec): boolean {
+  if (spec.config?.some((name) => existsSync(join(root, name)))) return true;
+  if (spec.pkgKey && packageJsonHasKey(root, spec.pkgKey)) return true;
+  if (spec.sections?.some(({ file, pattern }) => fileContains(root, file, pattern))) return true;
+  return false;
 }
 
-function eslintConfigured(root: string): boolean {
-  const files = [
-    ".eslintrc",
-    ".eslintrc.json",
-    ".eslintrc.js",
-    ".eslintrc.cjs",
-    ".eslintrc.yaml",
-    ".eslintrc.yml",
-    "eslint.config.js",
-    "eslint.config.mjs",
-    "eslint.config.cjs",
-    "eslint.config.ts",
-  ];
-  return hasAnyFile(root, files);
+/** Build a ToolCommand from an args template, substituting {file}. */
+function buildCommand(
+  spec: ToolchainSpec,
+  command: string,
+  args: string[],
+  file: string,
+  kind: "format" | "lint",
+): ToolCommand {
+  return { name: spec.name, command, args: args.map((a) => a.replace("{file}", file)), kind };
 }
 
-function ruffConfigured(root: string): boolean {
-  return (
-    hasAnyFile(root, ["ruff.toml", ".ruff.toml"]) ||
-    fileContains(root, "pyproject.toml", /^\s*\[tool\.ruff\]/m)
-  );
-}
-
-function blackConfigured(root: string): boolean {
-  return (
-    hasAnyFile(root, [".black"]) ||
-    fileContains(root, "pyproject.toml", /^\s*\[tool\.black\]/m) ||
-    fileContains(root, "setup.cfg", /^\s*\[black\]/m) ||
-    fileContains(root, "tox.ini", /^\s*\[black\]/m)
-  );
-}
-
-function detectWeb(root: string, file: string): Detected {
+/**
+ * Resolve the formatter and linter for `file` from the declarative TOOLCHAINS
+ * table (see toolchains.ts). Array order is priority: each slot (format, lint)
+ * goes to the first spec that is configured AND installed.
+ */
+export function detect(root: string, file: string): Detected {
   let format: ToolCommand | null = null;
   let lint: ToolCommand | null = null;
-
-  if (hasAnyFile(root, ["biome.json", "biome.jsonc"])) {
-    const biome = resolveLocalBin(root, "biome");
-    if (biome) {
-      format = { name: "biome", command: biome, args: ["format", "--write", file], kind: "format" };
-      lint = { name: "biome", command: biome, args: ["check", file], kind: "lint" };
-    }
+  for (const spec of TOOLCHAINS) {
+    if (!spec.files.test(file)) continue;
+    if (!isConfigured(root, spec)) continue;
+    const command = spec.bin === "local" ? resolveLocalBin(root, spec.name) : spec.name;
+    if (!command) continue;
+    if (!format && spec.format) format = buildCommand(spec, command, spec.format, file, "format");
+    if (!lint && spec.lint) lint = buildCommand(spec, command, spec.lint, file, "lint");
   }
-  if (!format && prettierConfigured(root)) {
-    const prettier = resolveLocalBin(root, "prettier");
-    if (prettier)
-      format = { name: "prettier", command: prettier, args: ["--write", file], kind: "format" };
-  }
-  if (
-    !format &&
-    hasAnyFile(root, ["dprint.json", ".dprint.json", "dprint.jsonc", ".dprint.jsonc"])
-  ) {
-    const dprint = resolveLocalBin(root, "dprint");
-    if (dprint) format = { name: "dprint", command: dprint, args: ["fmt", file], kind: "format" };
-  }
-  if (!format && hasAnyFile(root, [".oxfmtrc.json"])) {
-    const oxfmt = resolveLocalBin(root, "oxfmt");
-    if (oxfmt) format = { name: "oxfmt", command: oxfmt, args: ["--write", file], kind: "format" };
-  }
-
-  if (!lint && hasAnyFile(root, [".oxlintrc.json"])) {
-    const oxlint = resolveLocalBin(root, "oxlint");
-    if (oxlint) lint = { name: "oxlint", command: oxlint, args: [file], kind: "lint" };
-  }
-  if (!lint && eslintConfigured(root)) {
-    const eslint = resolveLocalBin(root, "eslint");
-    if (eslint) lint = { name: "eslint", command: eslint, args: [file], kind: "lint" };
-  }
-
   return { format, lint };
-}
-
-function detectPython(root: string, file: string): Detected {
-  if (ruffConfigured(root)) {
-    return {
-      format: { name: "ruff", command: "ruff", args: ["format", file], kind: "format" },
-      lint: { name: "ruff", command: "ruff", args: ["check", file], kind: "lint" },
-    };
-  }
-  if (blackConfigured(root)) {
-    return {
-      format: { name: "black", command: "black", args: [file], kind: "format" },
-      lint: null,
-    };
-  }
-  return { format: null, lint: null };
-}
-
-function detect(root: string, file: string): Detected {
-  if (WEB_EXT.test(file)) return detectWeb(root, file);
-  if (PY_EXT.test(file)) return detectPython(root, file);
-  if (GO_EXT.test(file) && existsSync(join(root, "go.mod"))) {
-    return {
-      format: { name: "gofmt", command: "gofmt", args: ["-w", file], kind: "format" },
-      lint: null,
-    };
-  }
-  if (RS_EXT.test(file) && existsSync(join(root, "Cargo.toml"))) {
-    return {
-      format: { name: "rustfmt", command: "rustfmt", args: [file], kind: "format" },
-      lint: null,
-    };
-  }
-  return { format: null, lint: null };
 }
 
 // --------------------------------------------------------------------------- //
