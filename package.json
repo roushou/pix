@@ -38,7 +38,8 @@
   "packageManager": "bun@1.3.0",
   "pi": {
     "extensions": [
-      "./extensions/*.ts"
+      "./extensions/*.ts",
+      "./extensions/permission-gate"
     ],
     "skills": [
       "./skills"
