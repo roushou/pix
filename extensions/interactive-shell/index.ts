@@ -5,6 +5,7 @@
  * pagers, git rebase, htop, psql, ...) by suspending the TUI while the
  * command runs. Use `!i <command>` to force interactive mode. Configure via
  * INTERACTIVE_COMMANDS (add) and INTERACTIVE_EXCLUDE (remove) env vars.
+ * The default command list is declarative data in commands.ts.
  *
  * This only intercepts user `!` commands, not agent bash tool calls — if the
  * agent runs an interactive command it will fail, which is the desired
@@ -13,79 +14,7 @@
 
 import { spawnSync } from "node:child_process";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-
-const DEFAULT_INTERACTIVE_COMMANDS = [
-  // Editors
-  "vim",
-  "nvim",
-  "vi",
-  "nano",
-  "emacs",
-  "pico",
-  "micro",
-  "helix",
-  "hx",
-  "kak",
-  // Pagers
-  "less",
-  "more",
-  "most",
-  // Git interactive
-  "git commit",
-  "git rebase",
-  "git merge",
-  "git cherry-pick",
-  "git revert",
-  "git add -p",
-  "git add --patch",
-  "git add -i",
-  "git add --interactive",
-  "git stash -p",
-  "git stash --patch",
-  "git reset -p",
-  "git reset --patch",
-  "git checkout -p",
-  "git checkout --patch",
-  "git difftool",
-  "git mergetool",
-  // System monitors
-  "htop",
-  "top",
-  "btop",
-  "glances",
-  // File managers
-  "ranger",
-  "nnn",
-  "lf",
-  "mc",
-  "vifm",
-  // Git TUIs
-  "tig",
-  "lazygit",
-  "gitui",
-  // Fuzzy finders
-  "fzf",
-  "sk",
-  // Remote sessions
-  "ssh",
-  "telnet",
-  "mosh",
-  // Database clients
-  "psql",
-  "mysql",
-  "sqlite3",
-  "mongosh",
-  "redis-cli",
-  // Kubernetes/Docker
-  "kubectl edit",
-  "kubectl exec -it",
-  "docker exec -it",
-  "docker run -it",
-  // Other
-  "tmux",
-  "screen",
-  "ncdu",
-];
+import { DEFAULT_INTERACTIVE_COMMANDS } from "./commands.ts";
 
 function getInteractiveCommands(): string[] {
   const additional =
@@ -100,7 +29,7 @@ function getInteractiveCommands(): string[] {
   );
 }
 
-function isInteractiveCommand(command: string): boolean {
+export function isInteractiveCommand(command: string): boolean {
   const trimmed = command.trim().toLowerCase();
 
   for (const cmd of getInteractiveCommands()) {

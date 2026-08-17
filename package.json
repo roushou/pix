@@ -40,7 +40,8 @@
     "extensions": [
       "./extensions/*.ts",
       "./extensions/permission-gate",
-      "./extensions/auto-format"
+      "./extensions/auto-format",
+      "./extensions/interactive-shell"
     ],
     "skills": [
       "./skills"
