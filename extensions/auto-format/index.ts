@@ -53,7 +53,9 @@ import {
   type ExecResult,
 } from "@earendil-works/pi-coding-agent";
 import { PROJECT_ROOT_MARKERS, TOOLCHAINS, type ToolchainSpec } from "./toolchains.ts";
+import { resolveConfigObject, type ConfigObjectSpec } from "../shared/config.ts";
 import { loadExtensionSettings } from "../shared/settings.ts";
+import { truncateChars } from "../shared/text.ts";
 
 const MAX_FILE_BYTES = 1_000_000;
 const MAX_LINT_CHARS = 2_000;
@@ -76,18 +78,48 @@ const DEFAULT_CONFIG: AutoFormatConfig = {
   timeoutMs: DEFAULT_TIMEOUT_MS,
 };
 
-function loadConfig(cwd: string): AutoFormatConfig {
-  const merged = loadExtensionSettings(cwd, "autoFormat");
+/**
+ * Declarative config table for the `autoFormat` settings section (see
+ * shared/config.ts). Exported for tests: AUTO_FORMAT_CONFIG_SPEC +
+ * resolveConfigObject == loadConfig.
+ */
+export const AUTO_FORMAT_CONFIG_SPEC = {
+  enabled: {
+    key: "enabled",
+    channel: "settings",
+    merge: "override",
+    default: DEFAULT_CONFIG.enabled,
+    parse: (raw: unknown) => (typeof raw === "boolean" ? raw : DEFAULT_CONFIG.enabled),
+  },
+  format: {
+    key: "format",
+    channel: "settings",
+    merge: "override",
+    default: DEFAULT_CONFIG.format,
+    parse: (raw: unknown) => (typeof raw === "boolean" ? raw : DEFAULT_CONFIG.format),
+  },
+  lint: {
+    key: "lint",
+    channel: "settings",
+    merge: "override",
+    default: DEFAULT_CONFIG.lint,
+    parse: (raw: unknown) => (typeof raw === "boolean" ? raw : DEFAULT_CONFIG.lint),
+  },
+  timeoutMs: {
+    key: "timeoutMs",
+    channel: "settings",
+    merge: "override",
+    default: DEFAULT_CONFIG.timeoutMs,
+    parse: (raw: unknown) => (typeof raw === "number" && raw > 0 ? raw : DEFAULT_CONFIG.timeoutMs),
+  },
+} satisfies ConfigObjectSpec<AutoFormatConfig>;
 
-  return {
-    enabled: typeof merged.enabled === "boolean" ? merged.enabled : DEFAULT_CONFIG.enabled,
-    format: typeof merged.format === "boolean" ? merged.format : DEFAULT_CONFIG.format,
-    lint: typeof merged.lint === "boolean" ? merged.lint : DEFAULT_CONFIG.lint,
-    timeoutMs:
-      typeof merged.timeoutMs === "number" && merged.timeoutMs > 0
-        ? merged.timeoutMs
-        : DEFAULT_CONFIG.timeoutMs,
-  };
+function loadConfig(cwd: string): AutoFormatConfig {
+  return resolveConfigObject(
+    AUTO_FORMAT_CONFIG_SPEC,
+    loadExtensionSettings(cwd, "autoFormat"),
+    process.env,
+  );
 }
 
 // --------------------------------------------------------------------------- //
@@ -198,11 +230,6 @@ function safeRead(file: string): string | null {
   }
 }
 
-function truncate(text: string, max: number): string {
-  if (text.length <= max) return text;
-  return `${text.slice(0, max - 1).trimEnd()}…`;
-}
-
 async function execTool(
   pi: ExtensionAPI,
   cmd: ToolCommand,
@@ -244,7 +271,7 @@ async function runFormat(
   }
   if (result === null) return null;
   if (result.code !== 0) {
-    const detail = truncate((result.stderr || result.stdout).trim(), 300) || "unknown error";
+    const detail = truncateChars((result.stderr || result.stdout).trim(), 300) || "unknown error";
     return `[auto-format] ${cmd.name} failed on ${rel} (exit ${result.code}): ${detail}`;
   }
 
@@ -273,7 +300,7 @@ async function runLint(
 
   const output = `${result.stdout}\n${result.stderr}`.trim();
   if (!output) return null;
-  return `[auto-format] ${cmd.name} found issues in ${rel}:\n${truncate(output, MAX_LINT_CHARS)}`;
+  return `[auto-format] ${cmd.name} found issues in ${rel}:\n${truncateChars(output, MAX_LINT_CHARS)}`;
 }
 
 // --------------------------------------------------------------------------- //

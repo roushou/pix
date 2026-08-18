@@ -29,7 +29,10 @@
 
 import { type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { resolveConfigObject, type ConfigObjectSpec } from "./shared/config.ts";
 import { loadExtensionSettings } from "./shared/settings.ts";
+import { truncateOutput } from "./shared/text.ts";
+import { asText, withTimeout } from "./shared/tools.ts";
 
 const MAX_OUTPUT_BYTES = 50 * 1024;
 const MAX_OUTPUT_LINES = 2000;
@@ -53,35 +56,56 @@ const DEFAULT_CONFIG: WebConfig = {
   timeoutMs: DEFAULT_TIMEOUT_MS,
 };
 
+function isSearchProvider(value: unknown): value is SearchProvider {
+  return value === "duckduckgo" || value === "tavily" || value === "brave" || value === "serper";
+}
+
+/**
+ * Declarative config table for the `web` settings section (see shared/config.ts).
+ * Exported for tests: WEB_CONFIG_SPEC + resolveConfigObject == loadConfig.
+ */
+export const WEB_CONFIG_SPEC = {
+  userAgent: {
+    key: "userAgent",
+    channel: "settings",
+    merge: "override",
+    default: DEFAULT_CONFIG.userAgent,
+    parse: (raw: unknown) =>
+      typeof raw === "string" && raw.trim() ? raw : DEFAULT_CONFIG.userAgent,
+  },
+  searchProvider: {
+    key: "searchProvider",
+    channel: "settings",
+    merge: "override",
+    default: DEFAULT_CONFIG.searchProvider,
+    parse: (raw: unknown) => (isSearchProvider(raw) ? raw : DEFAULT_CONFIG.searchProvider),
+  },
+  maxResults: {
+    key: "maxResults",
+    channel: "settings",
+    merge: "override",
+    default: DEFAULT_CONFIG.maxResults,
+    parse: (raw: unknown) =>
+      typeof raw === "number" && Number.isInteger(raw) && raw > 0 ? raw : DEFAULT_CONFIG.maxResults,
+  },
+  timeoutMs: {
+    key: "timeoutMs",
+    channel: "settings",
+    merge: "override",
+    default: DEFAULT_CONFIG.timeoutMs,
+    parse: (raw: unknown) => (typeof raw === "number" && raw > 0 ? raw : DEFAULT_CONFIG.timeoutMs),
+  },
+} satisfies ConfigObjectSpec<WebConfig>;
+
 function loadConfig(cwd: string): WebConfig {
-  const merged = loadExtensionSettings(cwd, "web");
-
-  const provider = merged.searchProvider;
-  const isProvider =
-    provider === "duckduckgo" ||
-    provider === "tavily" ||
-    provider === "brave" ||
-    provider === "serper";
-
-  return {
-    userAgent: typeof merged.userAgent === "string" ? merged.userAgent : DEFAULT_CONFIG.userAgent,
-    searchProvider: isProvider ? provider : DEFAULT_CONFIG.searchProvider,
-    maxResults:
-      typeof merged.maxResults === "number" && merged.maxResults > 0
-        ? merged.maxResults
-        : DEFAULT_CONFIG.maxResults,
-    timeoutMs:
-      typeof merged.timeoutMs === "number" && merged.timeoutMs > 0
-        ? merged.timeoutMs
-        : DEFAULT_CONFIG.timeoutMs,
-  };
+  return resolveConfigObject(WEB_CONFIG_SPEC, loadExtensionSettings(cwd, "web"), process.env);
 }
 
 // --------------------------------------------------------------------------- //
 // HTML / text helpers
 // --------------------------------------------------------------------------- //
 
-function decodeEntities(text: string): string {
+export function decodeEntities(text: string): string {
   return text
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")
@@ -99,7 +123,7 @@ function stripTags(text: string): string {
   return text.replace(/<[^>]*>/g, " ");
 }
 
-function extractTitle(html: string): string | undefined {
+export function extractTitle(html: string): string | undefined {
   const match = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
   if (!match) return undefined;
   return (
@@ -109,7 +133,7 @@ function extractTitle(html: string): string | undefined {
   );
 }
 
-function htmlToText(html: string): string {
+export function htmlToText(html: string): string {
   const text = html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
@@ -135,62 +159,6 @@ function prettyJson(text: string): string {
   }
 }
 
-function truncateBytes(text: string, max: number): string {
-  if (Buffer.byteLength(text, "utf8") <= max) return text;
-  let out = text.slice(0, max);
-  while (Buffer.byteLength(out, "utf8") > max) out = out.slice(0, -1);
-  return out;
-}
-
-function truncateOutput(text: string): string {
-  const lines = text.split("\n");
-  let note = "";
-  if (lines.length > MAX_OUTPUT_LINES) {
-    lines.length = MAX_OUTPUT_LINES;
-    note = `\n\n[Truncated: showing first ${MAX_OUTPUT_LINES} lines]`;
-  }
-  let out = lines.join("\n");
-  if (Buffer.byteLength(out, "utf8") > MAX_OUTPUT_BYTES) {
-    out = truncateBytes(out, MAX_OUTPUT_BYTES);
-    note = `\n\n[Truncated to ${MAX_OUTPUT_BYTES} bytes]`;
-  }
-  return out + note;
-}
-
-// --------------------------------------------------------------------------- //
-// Fetch plumbing
-// --------------------------------------------------------------------------- //
-
-interface FetchHandle {
-  signal: AbortSignal;
-  timedOut: boolean;
-  cleanup: () => void;
-}
-
-function withTimeout(signal: AbortSignal | undefined, timeoutMs: number): FetchHandle {
-  const controller = new AbortController();
-  let timedOut = false;
-  const timeout = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, timeoutMs);
-  const onAbort = () => controller.abort();
-  if (signal) {
-    if (signal.aborted) onAbort();
-    else signal.addEventListener("abort", onAbort, { once: true });
-  }
-  return {
-    signal: controller.signal,
-    get timedOut() {
-      return timedOut;
-    },
-    cleanup: () => {
-      clearTimeout(timeout);
-      signal?.removeEventListener("abort", onAbort);
-    },
-  };
-}
-
 // --------------------------------------------------------------------------- //
 // Search backends
 // --------------------------------------------------------------------------- //
@@ -201,7 +169,7 @@ interface SearchResult {
   snippet: string;
 }
 
-function extractUddg(href: string): string {
+export function extractUddg(href: string): string {
   const match = /uddg=([^&]+)/.exec(href);
   if (!match) return href.startsWith("//") ? `https:${href}` : href;
   try {
@@ -211,7 +179,7 @@ function extractUddg(href: string): string {
   }
 }
 
-function extractDuckDuckGoResults(html: string): SearchResult[] {
+export function extractDuckDuckGoResults(html: string): SearchResult[] {
   const results: SearchResult[] = [];
   const titleRe = /<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi;
   const snippetRe = /<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi;
@@ -414,15 +382,12 @@ export default function (pi: ExtensionAPI) {
             `Fetched ${res.url} — binary content not shown.\n` +
             `Status: ${res.status} ${res.statusText}`.trim() +
             `\nContent-Type: ${contentType || "unknown"}\nSize: ${length} bytes`;
-          return {
-            content: [{ type: "text", text }],
-            details: {
-              url: res.url,
-              status: res.status,
-              contentType,
-              binary: true,
-            },
-          };
+          return asText(text, {
+            url: res.url,
+            status: res.status,
+            contentType,
+            binary: true,
+          });
         }
 
         const body = await res.text();
@@ -447,12 +412,9 @@ export default function (pi: ExtensionAPI) {
           (title && !params.raw ? `# ${title}\n\n` : "") +
           header.join(" · ") +
           "\n\n" +
-          truncateOutput(content);
+          truncateOutput(content, { maxLines: MAX_OUTPUT_LINES, maxBytes: MAX_OUTPUT_BYTES });
 
-        return {
-          content: [{ type: "text", text }],
-          details: { url: res.url, status: res.status, contentType, title },
-        };
+        return asText(text, { url: res.url, status: res.status, contentType, title });
       } catch (error) {
         if (signal?.aborted) throw error;
         const message = error instanceof Error ? error.message : String(error);
@@ -508,10 +470,7 @@ export default function (pi: ExtensionAPI) {
         }
 
         const text = formatSearchResults(params.query, results);
-        return {
-          content: [{ type: "text", text }],
-          details: { query: params.query, provider, count: results.length, results },
-        };
+        return asText(text, { query: params.query, provider, count: results.length, results });
       } catch (error) {
         if (signal?.aborted) throw error;
         const message = error instanceof Error ? error.message : String(error);

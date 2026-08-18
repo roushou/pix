@@ -49,6 +49,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { Container, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
+import { truncateBytes } from "./shared/text.ts";
 
 const MAX_PARALLEL_TASKS = 8;
 const MAX_CONCURRENCY = 4;
@@ -86,7 +87,7 @@ type AgentFrontmatter = {
 };
 
 /** Accept both `tools: read, bash` and `tools: [read, bash]`. */
-function parseToolList(value: unknown): string[] | undefined {
+export function parseToolList(value: unknown): string[] | undefined {
   const raw = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
   const tools = raw
     .filter((t): t is string => typeof t === "string")
@@ -207,7 +208,7 @@ interface UsageStats {
   turns: number;
 }
 
-function formatTokens(count: number): string {
+export function formatTokens(count: number): string {
   if (count < 1000) return String(count);
   if (count < 10_000) return `${(count / 1000).toFixed(1)}k`;
   if (count < 1_000_000) return `${Math.round(count / 1000)}k`;
@@ -229,7 +230,7 @@ function formatUsageStats(usage: UsageStats, model?: string): string {
 
 type Fg = (color: ThemeColor, text: string) => string;
 
-function shortenPath(p: string): string {
+export function shortenPath(p: string): string {
   const home = os.homedir();
   return p.startsWith(home) ? `~${p.slice(home.length)}` : p;
 }
@@ -330,7 +331,7 @@ const ZERO_USAGE = (): UsageStats => ({
   turns: 0,
 });
 
-function getFinalOutput(messages: Message[]): string {
+export function getFinalOutput(messages: Message[]): string {
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];
     if (msg?.role === "assistant") {
@@ -342,7 +343,7 @@ function getFinalOutput(messages: Message[]): string {
   return "";
 }
 
-function isFailedResult(result: SingleResult): boolean {
+export function isFailedResult(result: SingleResult): boolean {
   return result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
 }
 
@@ -353,15 +354,10 @@ function getResultOutput(result: SingleResult): string {
   return getFinalOutput(result.messages) || "(no output)";
 }
 
-function truncateParallelOutput(output: string): string {
-  const byteLength = Buffer.byteLength(output, "utf8");
-  if (byteLength <= PER_TASK_OUTPUT_CAP) return output;
-
-  let truncated = output.slice(0, PER_TASK_OUTPUT_CAP);
-  while (Buffer.byteLength(truncated, "utf8") > PER_TASK_OUTPUT_CAP) {
-    truncated = truncated.slice(0, -1);
-  }
-  return `${truncated}\n\n[Output truncated: ${byteLength - Buffer.byteLength(truncated, "utf8")} bytes omitted. Full output preserved in tool details.]`;
+export function truncateParallelOutput(output: string): string {
+  if (Buffer.byteLength(output, "utf8") <= PER_TASK_OUTPUT_CAP) return output;
+  const truncated = truncateBytes(output, PER_TASK_OUTPUT_CAP);
+  return `${truncated}\n\n[Output truncated: ${Buffer.byteLength(output, "utf8") - Buffer.byteLength(truncated, "utf8")} bytes omitted. Full output preserved in tool details.]`;
 }
 
 type DisplayItem =
@@ -417,7 +413,7 @@ async function writePromptToTempFile(
   return { dir: tmpDir, filePath };
 }
 
-function getPiInvocation(args: string[]): { command: string; args: string[] } {
+export function getPiInvocation(args: string[]): { command: string; args: string[] } {
   const currentScript = process.argv[1];
   const isBunVirtualScript = currentScript?.startsWith("/$bunfs/root/");
   if (currentScript && !isBunVirtualScript && fs.existsSync(currentScript)) {

@@ -58,6 +58,7 @@ import {
 import { sendNotification } from "../notify.ts";
 import { resolveSpec } from "../shared/config.ts";
 import { loadExtensionSettings } from "../shared/settings.ts";
+import { oneLine } from "../shared/text.ts";
 
 // ---------------------------------------------------------------------------
 // Scratch directories
@@ -346,9 +347,7 @@ const NOTIFY_BODY_MAX = 140;
 
 /** One-line, truncated command for the notification body. */
 function notifyBody(command: string): string {
-  const oneLine = command.replace(/\s+/g, " ").trim();
-  if (oneLine.length <= NOTIFY_BODY_MAX) return oneLine;
-  return `${oneLine.slice(0, NOTIFY_BODY_MAX - 1).trimEnd()}…`;
+  return oneLine(command, NOTIFY_BODY_MAX);
 }
 
 /**
