@@ -95,6 +95,18 @@ These ship bundled with the package and work out of the box. The tool also disco
 | -------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | [`kanagawa-wave`](themes/kanagawa-wave.json) | The [Kanagawa](https://github.com/rebelot/kanagawa.nvim) Wave palette. Select via `/settings` → Theme. |
 
+### Shared (`extensions/shared/`)
+
+Cross-extension foundations, each pure and unit-tested (`tests/`):
+
+| Module                                           | What it does                                                                                                                                            |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`config.ts`](extensions/shared/config.ts)       | Declarative `ConfigSpec` tables: settings channel overrides, env channel augments, `resolveConfigObject` for typed multi-key config.                    |
+| [`settings.ts`](extensions/shared/settings.ts)   | Global → project `settings.json` merge per extension key, best-effort.                                                                                  |
+| [`text.ts`](extensions/shared/text.ts)           | Byte-safe `truncateBytes`, line/byte `truncateOutput`, structure-preserving `truncateChars`, `oneLine`.                                                 |
+| [`snapshots.ts`](extensions/shared/snapshots.ts) | Session snapshot store for anchor-based editing: content-hash tags, stale-anchor verification, bounded LRU versions (30 paths × 4 versions, 4 MiB cap). |
+| [`tools.ts`](extensions/shared/tools.ts)         | Standard `asText` result builder and `withTimeout` abort+timeout wrapper for custom tools.                                                              |
+
 ### Keybindings (`config/`)
 
 Vim-style keybindings ship as [`config/keybindings.vim.json`](config/keybindings.vim.json) (pi loads keybindings from `~/.pi/agent/keybindings.json`, not from packages). To use them:

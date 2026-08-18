@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
+  resolveConfigObject,
   resolveSpec,
   splitColon,
   splitComma,
+  type ConfigObjectSpec,
   type ConfigSpec,
 } from "../extensions/shared/config.ts";
 
@@ -55,5 +57,55 @@ describe("env list splitters", () => {
   });
   test("splitComma trims and drops empties", () => {
     expect(splitComma("a, b,,c")).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("resolveConfigObject", () => {
+  const specs: ConfigObjectSpec<{ mode: string; dirs: string[]; retries: number }> = {
+    mode: {
+      key: "mode",
+      channel: "settings",
+      merge: "override",
+      default: "compact",
+      parse: (raw: unknown) => (raw === "rich" ? "rich" : "compact"),
+    },
+    dirs: {
+      key: "PI_DIRS",
+      channel: "env",
+      merge: "union",
+      default: ["/tmp"],
+      parse: splitColon,
+    },
+    retries: {
+      key: "retries",
+      channel: "settings",
+      merge: "override",
+      default: 3,
+      parse: (raw: unknown) => (typeof raw === "number" && raw > 0 ? raw : 3),
+    },
+  };
+
+  test("absent values resolve to defaults", () => {
+    expect(resolveConfigObject(specs, {}, {})).toEqual({
+      mode: "compact",
+      dirs: ["/tmp"],
+      retries: 3,
+    });
+  });
+
+  test("mixed settings and env channels resolve independently", () => {
+    expect(resolveConfigObject(specs, { mode: "rich", retries: 7 }, { PI_DIRS: "/x:/y" })).toEqual({
+      mode: "rich",
+      dirs: ["/tmp", "/x", "/y"],
+      retries: 7,
+    });
+  });
+
+  test("invalid values fall back per key without affecting others", () => {
+    expect(resolveConfigObject(specs, { mode: "bogus", retries: -1 }, { PI_DIRS: "" })).toEqual({
+      mode: "compact",
+      dirs: ["/tmp"],
+      retries: 3,
+    });
   });
 });

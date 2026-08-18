@@ -48,6 +48,30 @@ export function resolveSpec<T>(
   return spec.parse(raw);
 }
 
+/**
+ * A whole config object declared as one spec table: one `ConfigSpec` per key.
+ * Resolving the table yields a fully typed, defaulted config. This is the
+ * single pattern for multi-key extension config (previously web.ts and
+ * auto-format hand-rolled `typeof x === "boolean"` loaders that drifted from
+ * the channel rule enforced here).
+ */
+export type ConfigObjectSpec<T extends object> = {
+  [K in keyof T]: ConfigSpec<T[K]>;
+};
+
+/** Resolve every spec in `specs` into a typed config object. */
+export function resolveConfigObject<T extends object>(
+  specs: ConfigObjectSpec<T>,
+  settings: Record<string, unknown>,
+  env: Record<string, string | undefined>,
+): T {
+  const out = {} as Record<keyof T, unknown>;
+  for (const key of Object.keys(specs) as Array<keyof T>) {
+    out[key] = resolveSpec(specs[key]!, settings, env);
+  }
+  return out as T;
+}
+
 /** Split an env var's colon-separated list (e.g. PI_SCRATCH_DIRS). */
 export function splitColon(raw: unknown): string[] {
   return String(raw)
