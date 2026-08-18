@@ -1,12 +1,20 @@
 /**
- * ast-grep — structural search, rewrite, and symbol rename via the ast-grep CLI.
+ * ast-grep — structural search, rewrite, and symbol rename via the ast-grep CLI
+ * and, when available, the @ast-grep/napi in-process binding.
  *
  * Progressive enhancement: requires `ast-grep` on PATH — the tools report a
- * tools report a clear "not available" result otherwise, and the rest of
- * pix keeps working. The adapter is a thin, safe wrapper: spawn with an args
- * array (never a shell string), preview via `--json=compact`, apply with
- * `-U`, and re-record touched files into the session SnapshotStore so
- * subsequent anchor-based `patch` calls verify against fresh content.
+ * clear "not available" result otherwise, and the rest of pix keeps working.
+ * The adapter is a thin, safe wrapper: spawn with an args array (never a
+ * shell string), preview via `--json=compact`, and re-record touched files
+ * into the session SnapshotStore so subsequent anchor-based `patch` calls
+ * verify against fresh content.
+ *
+ * Apply path: when @ast-grep/napi is installed, matched files in the five
+ * bundled languages (TypeScript, JavaScript, Tsx, Html, Css) are rewritten
+ * in-process (parse -> findAll -> expand fix template -> commitEdits), which
+ * drops the CLI's re-scan-and-apply spawn. Files in other languages fall
+ * back to the CLI `-U` path per file. Discovery stays on the CLI so
+ * .gitignore is respected (napi's findInFiles does NOT honor it).
  *
  * Two tools:
  *
@@ -18,12 +26,14 @@
  *                only (function/variable/parameter/type names), never
  *                property accesses (`obj.foo`), string literals, or comments.
  *
- * Capability probe: `ast-grep --version` once per session.
+ * Capability probes: `ast-grep --version` and a lazy @ast-grep/napi import,
+ * both once per session.
  */
 
 import { spawn } from "node:child_process";
-import { readFile } from "node:fs/promises";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { withFileMutationQueue, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { SnapshotStore } from "./shared/snapshots.ts";
 import { asText } from "./shared/tools.ts";
@@ -65,6 +75,8 @@ export function normalizeMultiMetas(
 /** One match from ast-grep's `--json=compact` output. */
 export interface SgMatch {
   file: string;
+  /** ast-grep's language name for the file, e.g. "TypeScript", "Python". */
+  language: string;
   startLine: number; // 0-indexed, like ast-grep
   startColumn: number;
   endLine: number;
@@ -82,6 +94,7 @@ export function parseSgJson(raw: string): SgMatch[] {
   if (trimmed === "") return [];
   const parsed = JSON.parse(trimmed) as Array<{
     file?: string;
+    language?: string;
     range?: {
       start?: { line?: number; column?: number };
       end?: { line?: number; column?: number };
@@ -91,6 +104,7 @@ export function parseSgJson(raw: string): SgMatch[] {
   }>;
   return parsed.map((m) => ({
     file: m.file ?? "(unknown)",
+    language: m.language ?? "",
     startLine: m.range?.start?.line ?? 0,
     startColumn: m.range?.start?.column ?? 0,
     endLine: m.range?.end?.line ?? 0,
@@ -104,14 +118,74 @@ export function parseSgJson(raw: string): SgMatch[] {
 export function buildSgArgs(
   pattern: string,
   rewrite: string,
-  opts: { lang?: string; path?: string; json?: boolean; updateAll?: boolean } = {},
+  opts: {
+    lang?: string;
+    path?: string | string[];
+    json?: boolean;
+    updateAll?: boolean;
+  } = {},
 ): string[] {
   const args = ["-p", pattern, "-r", rewrite];
   if (opts.lang) args.push("-l", opts.lang);
   if (opts.json) args.push("--json=compact");
   if (opts.updateAll) args.push("-U");
-  if (opts.path) args.push(opts.path);
+  const paths = typeof opts.path === "string" ? [opts.path] : (opts.path ?? []);
+  for (const p of paths) args.push(p);
   return args;
+}
+
+/**
+ * Map an ast-grep CLI language name to the bundled @ast-grep/napi Lang value,
+ * or null when the napi binding cannot parse it (it bundles only five
+ * languages; others require dynamic grammar registration).
+ */
+export function langFromSgName(name: string): string | null {
+  switch (name) {
+    case "TypeScript":
+    case "JavaScript":
+    case "Tsx":
+    case "Html":
+    case "Css":
+      return name;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Expand an ast-grep fix template: `$NAME` resolves single captures,
+ * `$$$NAME` resolves multi captures. Literal text (including lone `$` not
+ * followed by a meta name) passes through untouched.
+ */
+export function expandTemplate(
+  template: string,
+  resolve: (name: string, multi: boolean) => string,
+): string {
+  return template.replace(
+    /\$\$\$([A-Za-z0-9_]+)|\$([A-Za-z_][A-Za-z0-9_]*)/g,
+    (_m, multi: string | undefined, single: string | undefined) => {
+      if (multi !== undefined) return resolve(multi, true);
+      if (single !== undefined) return resolve(single, false);
+      return _m;
+    },
+  );
+}
+
+/**
+ * Keep the outermost (first-by-position) items, dropping any whose range
+ * overlaps a kept one. ast-grep matches can nest (`function f() { function g() {} }`
+ * matches both); rewriting the outer span covers the inner, so only the
+ * outermost should produce an edit.
+ */
+export function keepOutermost<T extends { start: number; end: number }>(items: T[]): T[] {
+  const out: T[] = [];
+  let lastEnd = -1;
+  for (const item of items) {
+    if (item.start < lastEnd) continue;
+    lastEnd = item.end;
+    out.push(item);
+  }
+  return out;
 }
 
 // --------------------------------------------------------------------------- //
@@ -193,6 +267,11 @@ interface RewriteOutcome {
  * Preview (JSON + unified diff) then optionally apply a rewrite. Returns the
  * structured matches, the human-readable diff, and — when applied — the
  * freshly recorded snapshot tags for every touched file.
+ *
+ * Apply: files whose language the bundled @ast-grep/napi can parse are
+ * rewritten in-process; everything else (or when napi is unavailable)
+ * falls back to the CLI `-U` per file. Discovery always runs through the
+ * CLI so .gitignore is respected.
  */
 async function executeRewrite(
   pattern: string,
@@ -209,15 +288,7 @@ async function executeRewrite(
   const { pattern: p, rewrite: r } = normalizeMultiMetas(pattern, rewrite);
   const common = { lang: opts.lang, path: opts.path };
 
-  // Spawn cwd must be a directory; the scan path may be a file or ".".
-  const dir = opts.path === "." ? opts.cwd : opts.path;
-  const scanCwd = opts.path !== "." && !opts.path.includes("/") ? opts.cwd : opts.cwd;
-  const spawnCwd = opts.path === "." || opts.path.startsWith("./") ? opts.cwd : opts.cwd;
-  void dir;
-  void scanCwd;
-  void spawnCwd;
-
-  // 1. Structured preview: match metadata via JSON.
+  // 1. Structured preview: match metadata via JSON (authoritative counts).
   const preview = await runSg(buildSgArgs(p, r, { ...common, json: true }), opts.cwd, opts.signal);
   if (preview.code !== 0 && preview.code !== 1) {
     throw new Error(`${BINARY} failed (exit ${preview.code}): ${preview.stderr.trim()}`);
@@ -225,7 +296,7 @@ async function executeRewrite(
   const matches = parseSgJson(preview.stdout);
 
   // 2. Human-readable diff (unified), same pattern.
-  const diffRun = await runSg(buildSgArgs(p, r, common), opts.path, opts.signal);
+  const diffRun = await runSg(buildSgArgs(p, r, common), opts.cwd, opts.signal);
   const diff = diffRun.code === 0 ? diffRun.stdout : "(no diff output)";
 
   if (matches.length === 0 || !opts.apply) {
@@ -237,30 +308,147 @@ async function executeRewrite(
     );
   }
 
-  // 3. Apply in place, then re-record snapshots so patch anchors stay fresh.
-  const applyRun = await runSg(
-    buildSgArgs(p, r, { ...common, updateAll: true }),
-    opts.path,
-    opts.signal,
-  );
-  if (applyRun.code !== 0) {
-    throw new Error(`${BINARY} apply failed (exit ${applyRun.code}): ${applyRun.stderr.trim()}`);
-  }
-
+  // 3. Apply. Prefer the in-process napi path; route each file to the CLI
+  //    fallback when its language is not bundled or napi fails on it.
   const tags: Record<string, string> = {};
-  const files = [...new Set(matches.map((m) => m.file))];
-  const recorded = await Promise.all(
-    files.map(async (file) => {
-      const content = await readFile(file, "utf8").catch(() => null);
-      if (content === null) return null;
-      const tag = snapshots.record(file, content);
-      return tag === undefined ? null : ([file, tag] as const);
+  const napi = await getNapi();
+  const byFile = groupMatchesByFile(matches);
+  const cliFiles: string[] = [];
+
+  const routed = await Promise.all(
+    [...byFile.entries()].map(async ([file, group]) => {
+      if (!napi || langFromSgName(group.language) === null) {
+        return { file, cli: true };
+      }
+      const res = await applyFileViaNapi(file, group.language, p, r, opts, napi, snapshots).catch(
+        () => ({ tags: {}, failed: true }),
+      );
+      if (res.tags) Object.assign(tags, res.tags);
+      return { file, cli: res.failed };
     }),
   );
-  for (const entry of recorded) {
-    if (entry !== null) tags[entry[0]] = entry[1];
+  for (const { file, cli } of routed) {
+    if (cli) cliFiles.push(file);
   }
+
+  if (cliFiles.length > 0) {
+    const applyRun = await runSg(
+      buildSgArgs(p, r, { lang: opts.lang, updateAll: true, path: cliFiles }),
+      opts.cwd,
+      opts.signal,
+    );
+    if (applyRun.code !== 0) {
+      throw new Error(`${BINARY} apply failed (exit ${applyRun.code}): ${applyRun.stderr.trim()}`);
+    }
+    const recorded = await Promise.all(
+      cliFiles.map(async (file) => {
+        const content = await readFile(join(opts.cwd, file), "utf8").catch(() => null);
+        if (content === null) return null;
+        const tag = snapshots.record(join(opts.cwd, file), content);
+        return tag === undefined ? null : ([file, tag] as const);
+      }),
+    );
+    for (const entry of recorded) {
+      if (entry !== null) tags[entry[0]] = entry[1];
+    }
+  }
+
   return { outcome: { matches, diff }, applied: true, tags };
+}
+
+// --------------------------------------------------------------------------- //
+// In-process apply via @ast-grep/napi (optional dependency)
+// --------------------------------------------------------------------------- //
+
+type NapiModule = typeof import("@ast-grep/napi");
+
+let napiModule: NapiModule | null | undefined;
+
+/** Lazy-import the napi binding once per session; null when not installed. */
+async function getNapi(): Promise<NapiModule | null> {
+  if (napiModule !== undefined) return napiModule;
+  try {
+    napiModule = await import("@ast-grep/napi");
+  } catch {
+    napiModule = null;
+  }
+  return napiModule;
+}
+
+function groupMatchesByFile(
+  matches: SgMatch[],
+): Map<string, { language: string; matches: SgMatch[] }> {
+  const byFile = new Map<string, { language: string; matches: SgMatch[] }>();
+  for (const m of matches) {
+    const group = byFile.get(m.file);
+    if (group) {
+      group.matches.push(m);
+    } else {
+      byFile.set(m.file, { language: m.language, matches: [m] });
+    }
+  }
+  return byFile;
+}
+
+/**
+ * Rewrite one file in-process: parse, find matches, expand the fix template
+ * per match, filter nested/overlapping edits, commit, and write back. On
+ * success the new content is recorded into the snapshot store and the file's
+ * fresh tag is returned. Returns `failed: true` when the file should be
+ * re-applied via the CLI instead (e.g. a parse error).
+ */
+async function applyFileViaNapi(
+  file: string,
+  language: string,
+  pattern: string,
+  rewrite: string,
+  opts: { cwd: string },
+  napi: NapiModule,
+  snapshots: SnapshotStore,
+): Promise<{ tags: Record<string, string>; failed: boolean }> {
+  const abs = join(opts.cwd, file);
+  const source = await readFile(abs, "utf8").catch(() => null);
+  if (source === null) return { tags: {}, failed: true };
+
+  const langName = langFromSgName(language);
+  if (langName === null) return { tags: {}, failed: true };
+
+  const root = napi.parse((napi.Lang as Record<string, string>)[langName] as never, source);
+  const nodes = root.root().findAll(pattern);
+  if (nodes.length === 0) return { tags: {}, failed: true };
+
+  // Build edits, outermost-first, with the fix template expanded from the
+  // match's captures. Multi-captures are expanded as the source span between
+  // the first and last captured node, so inter-node trivia survives.
+  const pending = nodes.map((node) => ({
+    start: node.range().start.index,
+    end: node.range().end.index,
+    node,
+  }));
+  const edits: Array<{ startPos: number; endPos: number; insertedText: string }> = [];
+  for (const { start, end, node } of keepOutermost(pending)) {
+    const replacement = expandTemplate(rewrite, (name, multi) => {
+      if (multi) {
+        const captured = node.getMultipleMatches(name);
+        if (captured.length === 0) return "";
+        const from = captured[0]!.range().start.index;
+        const to = captured[captured.length - 1]!.range().end.index;
+        return source.slice(from, to);
+      }
+      return node.getMatch(name)?.text() ?? "";
+    });
+    edits.push({ startPos: start, endPos: end, insertedText: replacement });
+  }
+  if (edits.length === 0) return { tags: {}, failed: true };
+
+  const rewritten = root.root().commitEdits(edits);
+  if (rewritten === source) return { tags: {}, failed: false };
+
+  await withFileMutationQueue(abs, async () => {
+    await writeFile(abs, rewritten);
+  });
+  const tag = snapshots.record(abs, rewritten);
+  return { tags: tag === undefined ? {} : { [file]: tag }, failed: false };
 }
 
 function formatRewriteResult(

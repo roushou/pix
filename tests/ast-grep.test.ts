@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { buildSgArgs, normalizeMultiMetas, parseSgJson } from "../extensions/ast-grep.ts";
+import {
+  buildSgArgs,
+  expandTemplate,
+  keepOutermost,
+  langFromSgName,
+  normalizeMultiMetas,
+  parseSgJson,
+} from "../extensions/ast-grep.ts";
 
 describe("normalizeMultiMetas", () => {
   test("renames anonymous $$$ to $$$M1 in both pattern and rewrite", () => {
@@ -55,6 +62,7 @@ describe("parseSgJson", () => {
     expect(parsed).toHaveLength(1);
     expect(parsed[0]).toMatchObject({
       file: "a.ts",
+      language: "TypeScript",
       startLine: 0,
       startColumn: 7,
       endLine: 2,
@@ -82,6 +90,7 @@ describe("parseSgJson", () => {
     const parsed = parseSgJson(JSON.stringify([{}]));
     expect(parsed[0]).toEqual({
       file: "(unknown)",
+      language: "",
       startLine: 0,
       startColumn: 0,
       endLine: 0,
@@ -122,5 +131,93 @@ describe("buildSgArgs", () => {
 
   test("no path leaves the arg list without a positional", () => {
     expect(buildSgArgs("p", "r")).toEqual(["-p", "p", "-r", "r"]);
+  });
+
+  test("an array of paths is expanded to positionals", () => {
+    expect(buildSgArgs("p", "r", { path: ["a.ts", "b.ts"] })).toEqual([
+      "-p",
+      "p",
+      "-r",
+      "r",
+      "a.ts",
+      "b.ts",
+    ]);
+  });
+});
+
+describe("langFromSgName", () => {
+  test("maps the five bundled napi languages", () => {
+    expect(langFromSgName("TypeScript")).toBe("TypeScript");
+    expect(langFromSgName("JavaScript")).toBe("JavaScript");
+    expect(langFromSgName("Tsx")).toBe("Tsx");
+    expect(langFromSgName("Html")).toBe("Html");
+    expect(langFromSgName("Css")).toBe("Css");
+  });
+
+  test("rejects languages the napi binding cannot parse", () => {
+    expect(langFromSgName("Python")).toBeNull();
+    expect(langFromSgName("Rust")).toBeNull();
+    expect(langFromSgName("Jsx")).toBeNull();
+    expect(langFromSgName("")).toBeNull();
+  });
+});
+
+const resolveTemplateMeta = (name: string, multi: boolean) => `${multi ? "<<" : "<"}${name}>`;
+const onlyKnownTemplateMeta = (name: string) => (name === "KNOWN" ? "x" : "");
+
+describe("expandTemplate", () => {
+  test("expands single and multi metas", () => {
+    expect(expandTemplate("f($NAME, $$$ARGS) { $$$BODY }", resolveTemplateMeta)).toBe(
+      "f(<NAME>, <<ARGS>) { <<BODY> }",
+    );
+  });
+
+  test("leaves literal text and lone $ untouched", () => {
+    expect(expandTemplate("cost $5 and $, done", resolveTemplateMeta)).toBe("cost $5 and $, done");
+  });
+
+  test("no metas passes through unchanged", () => {
+    expect(expandTemplate("const x = 1;", resolveTemplateMeta)).toBe("const x = 1;");
+  });
+
+  test("unmatched metas resolve to empty string", () => {
+    expect(expandTemplate("a $KNOWN b $UNKNOWN c", onlyKnownTemplateMeta)).toBe("a x b  c");
+  });
+});
+
+describe("keepOutermost", () => {
+  test("keeps disjoint ranges", () => {
+    expect(
+      keepOutermost([
+        { start: 0, end: 5 },
+        { start: 10, end: 15 },
+      ]),
+    ).toEqual([
+      { start: 0, end: 5 },
+      { start: 10, end: 15 },
+    ]);
+  });
+
+  test("drops ranges nested inside a kept one (outermost wins)", () => {
+    expect(
+      keepOutermost([
+        { start: 0, end: 20 },
+        { start: 2, end: 8 },
+        { start: 12, end: 15 },
+      ]),
+    ).toEqual([{ start: 0, end: 20 }]);
+  });
+
+  test("handles overlapping-but-not-nested by keeping the first", () => {
+    expect(
+      keepOutermost([
+        { start: 0, end: 10 },
+        { start: 5, end: 15 },
+      ]),
+    ).toEqual([{ start: 0, end: 10 }]);
+  });
+
+  test("empty input stays empty", () => {
+    expect(keepOutermost([])).toEqual([]);
   });
 });
