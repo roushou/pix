@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { AutocompleteProvider } from "@earendil-works/pi-tui";
 import {
   createSymbolAutocompleteProvider,
-  extractSymbolToken,
+  extractCompletionQuery,
 } from "../extensions/symbol-completions.ts";
 import { parseOutlineStream } from "../extensions/ast-grep.ts";
 
@@ -18,28 +18,72 @@ const dummyProvider: AutocompleteProvider = {
   },
 };
 
-describe("extractSymbolToken", () => {
-  test("matches @@ at line start", () => {
-    expect(extractSymbolToken("@@sendNotif")).toBe("sendNotif");
-    expect(extractSymbolToken("@@")).toBe("");
+describe("extractCompletionQuery", () => {
+  test("top mode at line start", () => {
+    expect(extractCompletionQuery("@@sendNotif")).toEqual({
+      mode: "top",
+      query: "sendNotif",
+      rawPrefix: "@@sendNotif",
+    });
+    expect(extractCompletionQuery("@@")).toEqual({ mode: "top", query: "", rawPrefix: "@@" });
   });
 
-  test("matches @@ after a delimiter", () => {
-    expect(extractSymbolToken('refactor the "@@foo')).toBe("foo");
-    expect(extractSymbolToken("call ( @@compute")).toBe("compute");
+  test("top mode after a delimiter", () => {
+    expect(extractCompletionQuery('refactor the "@@foo')).toEqual({
+      mode: "top",
+      query: "foo",
+      rawPrefix: "@@foo",
+    });
+    expect(extractCompletionQuery("call ( @@compute")).toEqual({
+      mode: "top",
+      query: "compute",
+      rawPrefix: "@@compute",
+    });
+  });
+
+  test("class mode", () => {
+    expect(extractCompletionQuery("@@Greeter.gre")).toEqual({
+      mode: "class",
+      owner: "Greeter",
+      query: "gre",
+      rawPrefix: "@@Greeter.gre",
+    });
+    expect(extractCompletionQuery("@@Greeter.")).toEqual({
+      mode: "class",
+      owner: "Greeter",
+      query: "",
+      rawPrefix: "@@Greeter.",
+    });
+  });
+
+  test("members mode", () => {
+    expect(extractCompletionQuery("@@.get")).toEqual({
+      mode: "members",
+      query: "get",
+      rawPrefix: "@@.get",
+    });
+    expect(extractCompletionQuery("@@.")).toEqual({
+      mode: "members",
+      query: "",
+      rawPrefix: "@@.",
+    });
   });
 
   test("does not match mid-identifier", () => {
-    expect(extractSymbolToken("myVar@@x")).toBeUndefined();
-    expect(extractSymbolToken("abc@@x")).toBeUndefined();
+    expect(extractCompletionQuery("myVar@@x")).toBeUndefined();
+    expect(extractCompletionQuery("abc@@x")).toBeUndefined();
   });
 
   test("does not match a lone @", () => {
-    expect(extractSymbolToken("@path/to")).toBeUndefined();
+    expect(extractCompletionQuery("@path/to")).toBeUndefined();
   });
 
   test("allows $ in symbol names", () => {
-    expect(extractSymbolToken("@@$ready")).toBe("$ready");
+    expect(extractCompletionQuery("@@$ready")).toEqual({
+      mode: "top",
+      query: "$ready",
+      rawPrefix: "@@$ready",
+    });
   });
 });
 

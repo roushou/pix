@@ -168,6 +168,122 @@ export function parseOutlineStream(raw: string): OutlineSymbol[] {
   return [...byName.values()];
 }
 
+/** A class/interface member (method or field) with its owner. */
+export interface MemberSymbol {
+  name: string;
+  owner: string;
+  /** "method" | "field" */
+  symbolType: "method" | "field";
+  file: string;
+  /** 1-indexed line of the member declaration. */
+  line: number;
+}
+
+/** ast-grep CLI language name → @ast-grep/napi Lang for the bundled set. */
+const MEMBER_LANG_BY_EXT: Record<string, string> = {
+  ts: "TypeScript",
+  tsx: "Tsx",
+  mts: "TypeScript",
+  cts: "TypeScript",
+  js: "JavaScript",
+  jsx: "Tsx",
+  mjs: "JavaScript",
+  cjs: "JavaScript",
+};
+
+const MEMBER_KINDS = [
+  "method_definition",
+  "public_field_definition",
+  "property_signature",
+  "method_signature",
+] as const;
+
+const MEMBER_MODIFIERS =
+  /^(?:public|private|protected|readonly|static|abstract|async|declare|override|get|set|new|export|default|\*)\s+/;
+
+/**
+ * Extract the member name from its declaration text. Handles modifiers
+ * (`private prefix: string`), getters (`get foo()`), optional sigs
+ * (`render?()`), and `#private` fields. Returns null for computed names
+ * (`[Symbol.iterator]`) and anything unparseable.
+ */
+export function memberNameFromText(text: string): string | null {
+  let s = text.trim();
+  if (s.startsWith("[")) return null; // computed key
+  let prev = "";
+  while (prev !== s) {
+    prev = s;
+    s = s.replace(MEMBER_MODIFIERS, "").trim();
+  }
+  s = s.replace(/^#/, "");
+  const match = /^([A-Za-z_$][A-Za-z0-9_$]*)/.exec(s);
+  return match ? match[1]! : null;
+}
+
+/**
+ * Extract class/interface members (methods + fields) with their owners from
+ * a list of files, using the in-process napi binding. Files whose extension
+ * the bundled napi cannot parse are skipped; object-literal methods are
+ * excluded because only members whose ancestor is a class/interface
+ * declaration are kept. `files` are cwd-relative paths; `cwd` resolves them.
+ */
+export async function extractMembersFromFiles(
+  files: string[],
+  cwd: string,
+  napi: typeof import("@ast-grep/napi"),
+): Promise<MemberSymbol[]> {
+  const perFile = await Promise.all(
+    files.map(async (file): Promise<MemberSymbol[]> => {
+      const ext = file.split(".").pop()?.toLowerCase() ?? "";
+      const langName = MEMBER_LANG_BY_EXT[ext];
+      if (!langName) return [];
+
+      const source = await readFile(join(cwd, file), "utf8").catch(() => null);
+      if (source === null) return [];
+
+      let root;
+      try {
+        root = napi.parse((napi.Lang as Record<string, string>)[langName] as never, source);
+      } catch {
+        return [];
+      }
+
+      const members: MemberSymbol[] = [];
+      for (const kind of MEMBER_KINDS) {
+        let nodes;
+        try {
+          nodes = root.root().findAll({ rule: { kind } });
+        } catch {
+          continue;
+        }
+        for (const node of nodes) {
+          let owner: string | null = null;
+          for (const ancestor of node.ancestors()) {
+            const k = ancestor.kind();
+            if (k === "class_declaration" || k === "interface_declaration") {
+              owner = ancestor.field("name")?.text() ?? null;
+              break;
+            }
+          }
+          if (owner === null || owner === "") continue; // not a class/interface member
+          const name = memberNameFromText(node.text());
+          if (name === null) continue;
+          members.push({
+            name,
+            owner,
+            symbolType:
+              kind === "method_definition" || kind === "method_signature" ? "method" : "field",
+            file,
+            line: node.range().start.line + 1,
+          });
+        }
+      }
+      return members;
+    }),
+  );
+  return perFile.flat();
+}
+
 /** Build the ast-grep run arguments for a rewrite. Pure, so tests can pin it. */
 export function buildSgArgs(
   pattern: string,
@@ -427,7 +543,7 @@ type NapiModule = typeof import("@ast-grep/napi");
 let napiModule: NapiModule | null | undefined;
 
 /** Lazy-import the napi binding once per session; null when not installed. */
-async function getNapi(): Promise<NapiModule | null> {
+export async function getNapi(): Promise<NapiModule | null> {
   if (napiModule !== undefined) return napiModule;
   try {
     napiModule = await import("@ast-grep/napi");

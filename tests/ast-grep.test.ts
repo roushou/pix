@@ -4,6 +4,7 @@ import {
   expandTemplate,
   keepOutermost,
   langFromSgName,
+  memberNameFromText,
   normalizeMultiMetas,
   parseSgJson,
 } from "../extensions/ast-grep.ts";
@@ -219,5 +220,35 @@ describe("keepOutermost", () => {
 
   test("empty input stays empty", () => {
     expect(keepOutermost([])).toEqual([]);
+  });
+});
+
+describe("memberNameFromText", () => {
+  test("method name up to the paren", () => {
+    expect(memberNameFromText("greet(name: string): string {")).toBe("greet");
+  });
+
+  test("optional method signature", () => {
+    expect(memberNameFromText("render?(): void")).toBe("render");
+  });
+
+  test("strips access and decorator modifiers", () => {
+    expect(memberNameFromText('private prefix: string = "hi"')).toBe("prefix");
+    expect(memberNameFromText("static readonly COUNT = 1")).toBe("COUNT");
+    expect(memberNameFromText("get foo() {")).toBe("foo");
+    expect(memberNameFromText("set foo(v) {")).toBe("foo");
+  });
+
+  test("interface field", () => {
+    expect(memberNameFromText("timeoutMs: number")).toBe("timeoutMs");
+  });
+
+  test("private #field", () => {
+    expect(memberNameFromText("#items: string[]")).toBe("items");
+  });
+
+  test("computed names are rejected", () => {
+    expect(memberNameFromText("[Symbol.iterator]()")).toBeNull();
+    expect(memberNameFromText('["key"]()')).toBeNull();
   });
 });
