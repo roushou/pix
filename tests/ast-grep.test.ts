@@ -1,12 +1,17 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   buildSgArgs,
+  deriveSignatures,
   expandTemplate,
   keepOutermost,
   langFromSgName,
   memberNameFromText,
   normalizeMultiMetas,
   parseSgJson,
+  type OutlineSymbol,
 } from "../extensions/ast-grep.ts";
 
 describe("normalizeMultiMetas", () => {
@@ -250,5 +255,48 @@ describe("memberNameFromText", () => {
   test("computed names are rejected", () => {
     expect(memberNameFromText("[Symbol.iterator]()")).toBeNull();
     expect(memberNameFromText('["key"]()')).toBeNull();
+  });
+});
+
+describe("deriveSignatures", () => {
+  test("derives each symbol's signature from its declaration's first line", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "derive-sig-"));
+    try {
+      writeFileSync(
+        join(dir, "a.ts"),
+        "export async function greet(name: string): string {\n  return name;\n}\n",
+      );
+      const symbols: OutlineSymbol[] = [
+        {
+          name: "greet",
+          symbolType: "function",
+          file: "a.ts",
+          line: 1,
+          endLine: 2,
+          signature: "",
+          isImport: false,
+        },
+      ];
+      await deriveSignatures(symbols, dir);
+      expect(symbols[0]!.signature).toBe("export async function greet(name: string): string {");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("missing files leave the signature untouched", async () => {
+    const symbols: OutlineSymbol[] = [
+      {
+        name: "x",
+        symbolType: "function",
+        file: "nope.ts",
+        line: 1,
+        endLine: 1,
+        signature: "",
+        isImport: false,
+      },
+    ];
+    await deriveSignatures(symbols, "/nonexistent");
+    expect(symbols[0]!.signature).toBe("");
   });
 });

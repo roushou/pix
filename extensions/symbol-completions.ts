@@ -1,25 +1,24 @@
 /**
- * symbol-completions — `@@` symbol completion in the input editor.
+ * symbol-completions — `@@` symbol completion and `@@!` reference expansion.
  *
- * Type `@@` and start typing a symbol: the editor pops declarations from the
- * current project at the cursor. Powered by `ast-grep outline --json=stream`
- * for top-level symbols, plus an in-process @ast-grep/napi pass for class and
- * interface members. Indexes are built lazily on first trigger, cached with a
- * short TTL, then filtered locally per keystroke via pi-tui's fuzzyFilter.
+ * Two surfaces over one project index:
  *
- * Three modes, disambiguated from the built-in single-`@` file completion:
+ * 1. Completion (`@@`, `@@Class.`, `@@.`) — pops declarations/members in the
+ *    input editor, with signatures in the description and most-recently-used
+ *    ranking so your frequent symbols float up.
+ * 2. Reference expansion (`@@!name`, `@@!Owner.member`) — on submit, the
+ *    `input` event rewrites these tokens into inline `<symbol>` blocks with
+ *    the declaration's source, so the model gets ground truth without a read
+ *    round-trip. Plain `@@name` stays a bare reference; `@@!` is the explicit
+ *    "inject the body" directive.
  *
- *   @@foo            top-level symbols; on an empty hit, falls through to
- *                    members (the "I don't recall the owner" case) when the
- *                    query is long enough.
- *   @@Class.foo      members of one class/interface.
- *   @@.foo           every method/field across the repo (explicit broad mode).
+ * Index: `ast-grep outline --json=stream` for top-level symbols, plus an
+ * in-process @ast-grep/napi pass for class/interface members (owner resolved
+ * via the ancestor chain, object-literal methods excluded). Built lazily on
+ * first trigger, cached with a short TTL, filtered locally per keystroke.
  *
- * Members resolve their owner by walking the napi ancestor chain, so
- * object-literal methods are excluded and never pollute the list.
- *
- * Progressive enhancement: requires `ast-grep` on PATH (and, for members,
- * @ast-grep/napi); the provider silently defers to the built-in otherwise.
+ * Progressive enhancement: requires `ast-grep` on PATH (and napi for
+ * members); completion and expansion silently defer when unavailable.
  */
 
 import { type ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -29,12 +28,16 @@ import {
   type AutocompleteProvider,
   type AutocompleteSuggestions,
 } from "@earendil-works/pi-tui";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import {
+  deriveSignatures,
   extractMembersFromFiles,
   findSgVersion,
   getNapi,
   parseOutlineStream,
   runAstGrep,
+  type MemberSymbol,
   type OutlineSymbol,
 } from "./ast-grep.ts";
 
@@ -42,14 +45,22 @@ const INDEX_TTL_MS = 30_000;
 const MAX_SUGGESTIONS = 20;
 const MAX_SYMBOLS = 5000;
 const MAX_MEMBERS = 10_000;
+const MAX_DESCRIPTION_LEN = 72;
 /** Below this query length the member fallback does not fire (avoids typo noise). */
 const MEMBER_FALLBACK_MIN_QUERY = 2;
 
 interface RepoIndex {
   builtAt: number;
   symbols: OutlineSymbol[];
-  members: AutocompleteItem[] | null; // null = not built yet
+  members: MemberSymbol[] | null; // null = not built yet
+  mru: Map<string, number>; // item label -> recency counter
 }
+
+let mruCounter = 0;
+
+// --------------------------------------------------------------------------- //
+// Pure helpers (exported for tests)
+// --------------------------------------------------------------------------- //
 
 export type CompletionMode = "top" | "members" | "class";
 
@@ -69,52 +80,112 @@ export interface CompletionQuery {
  */
 export function extractCompletionQuery(textBeforeCursor: string): CompletionQuery | undefined {
   const match = textBeforeCursor.match(
-    /(?:^|[ \t"'(,;=])(@@)([A-Za-z0-9_$]*)(?:\.([A-Za-z0-9_$]*))?$/,
+    /(?:^|[ \t"'(,;=])(@@)(!?)([A-Za-z0-9_$]*)(?:\.([A-Za-z0-9_$]*))?$/,
   );
   if (!match) return undefined;
-  const beforeDot = match[2] ?? "";
-  const afterDot = match[3];
+  const sigil = match[1]! + (match[2] ?? "");
+  const beforeDot = match[3] ?? "";
+  const afterDot = match[4];
   if (afterDot === undefined) {
-    return { mode: "top", query: beforeDot, rawPrefix: `@@${beforeDot}` };
+    return { mode: "top", query: beforeDot, rawPrefix: `${sigil}${beforeDot}` };
   }
   if (beforeDot === "") {
-    return { mode: "members", query: afterDot, rawPrefix: `@@.${afterDot}` };
+    return { mode: "members", query: afterDot, rawPrefix: `${sigil}.${afterDot}` };
   }
   return {
     mode: "class",
     owner: beforeDot,
     query: afterDot,
-    rawPrefix: `@@${beforeDot}.${afterDot}`,
+    rawPrefix: `${sigil}${beforeDot}.${afterDot}`,
   };
 }
 
-/** Format an outline symbol as an autocomplete item. */
+/** Description for a symbol completion item: signature leads, file/line trails. */
+export function formatSymbolDescription(symbol: {
+  symbolType: string;
+  signature?: string;
+  file: string;
+  line: number;
+}): string {
+  const sig = (symbol.signature ?? "").trim();
+  const lead = sig.length > 0 ? sig : symbol.symbolType;
+  const truncated =
+    lead.length > MAX_DESCRIPTION_LEN ? `${lead.slice(0, MAX_DESCRIPTION_LEN - 1)}…` : lead;
+  return `${truncated} · ${symbol.file}:${symbol.line}`;
+}
+
+/** Stable reorder: previously-used items first (by recency), then fuzzy order. */
+export function applyMru<T extends { label: string }>(
+  items: T[],
+  mru: ReadonlyMap<string, number>,
+): T[] {
+  const used = items
+    .filter((i) => mru.has(i.label))
+    .toSorted((a, b) => (mru.get(b.label) ?? 0) - (mru.get(a.label) ?? 0));
+  const fresh = items.filter((i) => !mru.has(i.label));
+  return [...used, ...fresh];
+}
+
+/** One reference (`@@name` or `@@!name`) extracted from an outgoing prompt. */
+export interface SymbolReference {
+  raw: string;
+  /** Top-level name, or `Owner.member` for members. */
+  name: string;
+  /** True for `@@!name` (full body); false for `@@name` (signature only). */
+  expand: boolean;
+}
+
+const REFERENCE_RE = /@@(!?)([A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)?)/g;
+
+/** Extract `@@name` / `@@!name` / `@@Owner.member` tokens from a prompt. */
+export function extractSymbolReferences(text: string): SymbolReference[] {
+  const refs: SymbolReference[] = [];
+  for (const match of text.matchAll(REFERENCE_RE)) {
+    refs.push({ raw: match[0]!, name: match[2]!, expand: match[1] === "!" });
+  }
+  return refs;
+}
+
+/** Render a resolved symbol as an inline `<symbol>` context block. */
+export function renderSymbolBlock(name: string, file: string, line: number, body: string): string {
+  return `<symbol name="${name}" file="${file}:${line}">\n${body.trim()}\n</symbol>`;
+}
+
+/** Slice a declaration out of a file by 0-indexed line range. */
+function sliceLines(source: string, startLine: number, endLine: number): string {
+  const lines = source.split("\n");
+  const start = Math.max(0, Math.min(startLine, lines.length - 1));
+  const end = Math.max(start, Math.min(endLine, lines.length - 1));
+  return lines.slice(start, end + 1).join("\n");
+}
+
+// --------------------------------------------------------------------------- //
+// Item formatting
+// --------------------------------------------------------------------------- //
+
 function toItem(symbol: OutlineSymbol): AutocompleteItem {
   return {
     value: symbol.name,
     label: symbol.name,
-    description: `${symbol.symbolType} · ${symbol.file}:${symbol.line}`,
+    description: formatSymbolDescription(symbol),
   };
 }
 
-/** Format a member as an item; the owner is the answer, so it leads the label. */
-function memberToItem(member: {
-  name: string;
-  owner: string;
-  symbolType: string;
-  file: string;
-  line: number;
-}): AutocompleteItem {
+function memberToItem(member: MemberSymbol): AutocompleteItem {
   return {
     value: member.name,
     label: `${member.owner}.${member.name}`,
-    description: `${member.symbolType} · ${member.file}:${member.line}`,
+    description: formatSymbolDescription(member),
   };
 }
 
+// --------------------------------------------------------------------------- //
+// Index
+// --------------------------------------------------------------------------- //
+
 const indexes = new Map<string, RepoIndex>();
 const inflight = new Map<string, Promise<RepoIndex | null>>();
-const memberInflight = new Map<string, Promise<AutocompleteItem[] | null>>();
+const memberInflight = new Map<string, Promise<MemberSymbol[] | null>>();
 
 async function buildIndex(cwd: string, signal: AbortSignal | undefined): Promise<RepoIndex | null> {
   const cached = indexes.get(cwd);
@@ -130,7 +201,8 @@ async function buildIndex(cwd: string, signal: AbortSignal | undefined): Promise
     if (result.code !== 0) return null;
     const symbols = parseOutlineStream(result.stdout);
     if (symbols.length > MAX_SYMBOLS) symbols.length = MAX_SYMBOLS;
-    const index: RepoIndex = { builtAt: Date.now(), symbols, members: null };
+    await deriveSignatures(symbols, cwd);
+    const index: RepoIndex = { builtAt: Date.now(), symbols, members: null, mru: new Map() };
     indexes.set(cwd, index);
     return index;
   })();
@@ -144,21 +216,20 @@ async function buildIndex(cwd: string, signal: AbortSignal | undefined): Promise
 }
 
 /** Build the member index lazily, once per cached index. Null when napi is absent. */
-async function ensureMembers(index: RepoIndex, cwd: string): Promise<AutocompleteItem[] | null> {
+async function ensureMembers(index: RepoIndex, cwd: string): Promise<MemberSymbol[] | null> {
   if (index.members !== null) return index.members;
 
   const pending = memberInflight.get(cwd);
   if (pending) return pending;
 
-  const build = (async (): Promise<AutocompleteItem[] | null> => {
+  const build = (async (): Promise<MemberSymbol[] | null> => {
     const napi = await getNapi();
     if (napi === null) return null;
     const files = [...new Set(index.symbols.map((s) => s.file))];
     const members = await extractMembersFromFiles(files, cwd, napi);
     if (members.length > MAX_MEMBERS) members.length = MAX_MEMBERS;
-    const items = members.map(memberToItem);
-    index.members = items;
-    return items;
+    index.members = members;
+    return members;
   })();
 
   memberInflight.set(cwd, build);
@@ -168,6 +239,10 @@ async function ensureMembers(index: RepoIndex, cwd: string): Promise<Autocomplet
     memberInflight.delete(cwd);
   }
 }
+
+// --------------------------------------------------------------------------- //
+// Completion provider
+// --------------------------------------------------------------------------- //
 
 /**
  * Build the stacked autocomplete provider. Exported for live probes and tests;
@@ -208,7 +283,7 @@ export function createSymbolAutocompleteProvider(
         if (items.length === 0 && q.query.length >= MEMBER_FALLBACK_MIN_QUERY) {
           const members = await ensureMembers(index, cwd);
           if (members !== null) {
-            items = fuzzyFilter(members, q.query, (i) => i.label);
+            items = fuzzyFilter(members.map(memberToItem), q.query, (i) => i.label);
           }
         }
       } else if (q.mode === "members") {
@@ -216,18 +291,18 @@ export function createSymbolAutocompleteProvider(
           return current.getSuggestions(lines, cursorLine, cursorCol, options);
         const members = await ensureMembers(index, cwd);
         if (members !== null) {
-          items = fuzzyFilter(members, q.query, (i) => i.label);
+          items = fuzzyFilter(members.map(memberToItem), q.query, (i) => i.label);
         }
       } else {
         // class mode: owner scoped, so an empty query is fine.
         const members = await ensureMembers(index, cwd);
         if (members !== null) {
-          const scoped = members.filter((i) => i.label.startsWith(`${q.owner}.`));
+          const scoped = members.filter((m) => m.owner === q.owner).map(memberToItem);
           items = fuzzyFilter(scoped, q.query, (i) => i.label.slice(q.owner!.length + 1));
         }
       }
 
-      items = items.slice(0, MAX_SUGGESTIONS);
+      items = applyMru(items, index.mru).slice(0, MAX_SUGGESTIONS);
       if (items.length === 0) {
         return current.getSuggestions(lines, cursorLine, cursorCol, options);
       }
@@ -236,17 +311,30 @@ export function createSymbolAutocompleteProvider(
     },
 
     applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
-      // Symbol references replace the @@query inline — unlike the built-in's
-      // @-attachment path, no trailing space is added.
+      // Only @@ / @@! references are ours; delegate slash commands and file
+      // completions to the built-in provider so their insert semantics
+      // survive (e.g. `/reload` must stay `/reload`, not become `@@reload`).
+      if (!prefix.startsWith("@@")) {
+        return current.applyCompletion(lines, cursorLine, cursorCol, item, prefix);
+      }
+
+      // Record the pick so MRU ordering floats it up next time.
+      const index = indexes.get(cwd);
+      if (index) index.mru.set(item.label, ++mruCounter);
+
+      // Keep the @@ / @@! sigil so the reference resolves on submit (the
+      // input transform expands @@name to a signature and @@!name to the body).
+      const sigil = prefix.startsWith("@@!") ? "@@!" : "@@";
+      const insert = sigil + item.value;
       const currentLine = lines[cursorLine] ?? "";
       const beforePrefix = currentLine.slice(0, cursorCol - prefix.length);
       const afterCursor = currentLine.slice(cursorCol);
       const newLines = [...lines];
-      newLines[cursorLine] = beforePrefix + item.value + afterCursor;
+      newLines[cursorLine] = beforePrefix + insert + afterCursor;
       return {
         lines: newLines,
         cursorLine,
-        cursorCol: beforePrefix.length + item.value.length,
+        cursorCol: beforePrefix.length + insert.length,
       };
     },
 
@@ -256,9 +344,86 @@ export function createSymbolAutocompleteProvider(
   };
 }
 
+// --------------------------------------------------------------------------- //
+// `@@` reference expansion (input transform)
+// --------------------------------------------------------------------------- //
+
+/**
+ * Resolve `@@name` (signature) and `@@!name` (full body) tokens against the
+ * index, rendering inline `<symbol>` blocks. Unresolved symbols and missing
+ * index fall back to the bare name (never leave a literal `@@ref` in the
+ * prompt, which would be meaningless to the model).
+ */
+export async function expandSymbolReferences(text: string, cwd: string): Promise<string> {
+  const refs = extractSymbolReferences(text);
+  if (refs.length === 0) return text;
+
+  const index = await buildIndex(cwd, undefined);
+
+  // No ast-grep: strip sigils so the model sees bare names, not @@refs.
+  if (index === null) {
+    let out = text;
+    for (const ref of refs) out = out.replace(ref.raw, ref.name);
+    return out;
+  }
+
+  // Build a name -> symbol map and owner.member -> member map once.
+  const bySymbol = new Map(index.symbols.map((s) => [s.name, s]));
+  const members = index.members ?? (await ensureMembers(index, cwd));
+  const byMember = new Map((members ?? []).map((m) => [`${m.owner}.${m.name}`, m]));
+
+  // Resolve and read each referenced file once, in parallel.
+  const resolved = await Promise.all(
+    refs.map(async (ref) => {
+      const symbol = bySymbol.get(ref.name) ?? byMember.get(ref.name);
+      if (!symbol) return { ref, symbol: null, body: null as string | null };
+      try {
+        const source = await readFile(join(cwd, symbol.file), "utf8");
+        const body = ref.expand
+          ? sliceLines(source, symbol.line - 1, symbol.endLine)
+          : symbol.signature || sliceLines(source, symbol.line - 1, symbol.line - 1);
+        return { ref, symbol, body };
+      } catch {
+        return { ref, symbol, body: null as string | null };
+      }
+    }),
+  );
+
+  let out = text;
+  for (const { ref, symbol, body } of resolved) {
+    if (symbol === null || body === null || body.trim() === "") {
+      // Unresolved: fall back to the bare name so the model still sees intent.
+      out = out.replace(ref.raw, ref.name);
+      continue;
+    }
+    out = out.replace(ref.raw, renderSymbolBlock(ref.name, symbol.file, symbol.line, body));
+  }
+  return out;
+}
+
+// --------------------------------------------------------------------------- //
+// Extension wiring
+// --------------------------------------------------------------------------- //
+
 export default function (pi: ExtensionAPI): void {
   pi.on("session_start", (_event, ctx) => {
-    const cwd = ctx.cwd;
-    ctx.ui.addAutocompleteProvider((current) => createSymbolAutocompleteProvider(current, cwd));
+    try {
+      const cwd = ctx.cwd;
+      ctx.ui?.addAutocompleteProvider((current) => createSymbolAutocompleteProvider(current, cwd));
+    } catch {
+      // Never let a completion-provider registration break session start/reload.
+    }
+  });
+
+  pi.on("input", (event, ctx) => {
+    // Only pay the lookup cost when the message actually carries a reference.
+    if (!event.text.includes("@@")) return { action: "continue" };
+    return expandSymbolReferences(event.text, ctx.cwd)
+      .then((text) =>
+        text === event.text
+          ? ({ action: "continue" } as const)
+          : { action: "transform" as const, text },
+      )
+      .catch(() => ({ action: "continue" }) as const);
   });
 }

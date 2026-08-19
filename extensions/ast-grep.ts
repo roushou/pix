@@ -121,6 +121,10 @@ export interface OutlineSymbol {
   file: string;
   /** 1-indexed line of the declaration. */
   line: number;
+  /** 0-indexed last line of the node (for slicing the full declaration). */
+  endLine: number;
+  /** The declaration's leading line (from outline's `signature` field). */
+  signature: string;
   /** True when the entry is an import binding, not a declaration. */
   isImport: boolean;
 }
@@ -141,7 +145,8 @@ export function parseOutlineStream(raw: string): OutlineSymbol[] {
         name?: string;
         symbolType?: string;
         isImport?: boolean;
-        range?: { start?: { line?: number } };
+        signature?: string;
+        range?: { start?: { line?: number }; end?: { line?: number } };
       }>;
     };
     try {
@@ -157,6 +162,8 @@ export function parseOutlineStream(raw: string): OutlineSymbol[] {
         symbolType: item.symbolType,
         file,
         line: (item.range?.start?.line ?? 0) + 1,
+        endLine: item.range?.end?.line ?? item.range?.start?.line ?? 0,
+        signature: (item.signature ?? "").trim(),
         isImport: item.isImport === true,
       };
       const existing = byName.get(symbol.name);
@@ -168,6 +175,33 @@ export function parseOutlineStream(raw: string): OutlineSymbol[] {
   return [...byName.values()];
 }
 
+/**
+ * ast-grep's `outline --json=stream` leaves the `signature` field EMPTY when
+ * scanning a directory (verified on 0.45.1) — only single-file scans
+ * populate it. Since the index scans the whole project, derive each symbol's
+ * signature from the first line of its declaration instead, reading each
+ * referenced file once. Mutates `symbols` in place.
+ */
+export async function deriveSignatures(symbols: OutlineSymbol[], cwd: string): Promise<void> {
+  const byFile = new Map<string, OutlineSymbol[]>();
+  for (const symbol of symbols) {
+    const list = byFile.get(symbol.file);
+    if (list) list.push(symbol);
+    else byFile.set(symbol.file, [symbol]);
+  }
+  await Promise.all(
+    [...byFile.entries()].map(async ([file, syms]) => {
+      const source = await readFile(join(cwd, file), "utf8").catch(() => null);
+      if (source === null) return;
+      const lines = source.split("\n");
+      for (const symbol of syms) {
+        const first = (lines[symbol.line - 1] ?? "").trim();
+        if (first) symbol.signature = first;
+      }
+    }),
+  );
+}
+
 /** A class/interface member (method or field) with its owner. */
 export interface MemberSymbol {
   name: string;
@@ -177,6 +211,10 @@ export interface MemberSymbol {
   file: string;
   /** 1-indexed line of the member declaration. */
   line: number;
+  /** 0-indexed last line of the member (for slicing the full declaration). */
+  endLine: number;
+  /** The member declaration's leading line. */
+  signature: string;
 }
 
 /** ast-grep CLI language name → @ast-grep/napi Lang for the bundled set. */
@@ -268,6 +306,7 @@ export async function extractMembersFromFiles(
           if (owner === null || owner === "") continue; // not a class/interface member
           const name = memberNameFromText(node.text());
           if (name === null) continue;
+          const text = node.text();
           members.push({
             name,
             owner,
@@ -275,6 +314,8 @@ export async function extractMembersFromFiles(
               kind === "method_definition" || kind === "method_signature" ? "method" : "field",
             file,
             line: node.range().start.line + 1,
+            endLine: node.range().end.line,
+            signature: text.split("\n")[0]!.trim(),
           });
         }
       }
