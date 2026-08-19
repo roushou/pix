@@ -114,6 +114,60 @@ export function parseSgJson(raw: string): SgMatch[] {
   }));
 }
 
+/** One symbol entry from `ast-grep outline --json=stream` output. */
+export interface OutlineSymbol {
+  name: string;
+  symbolType: string; // function | class | interface | constant | struct | ...
+  file: string;
+  /** 1-indexed line of the declaration. */
+  line: number;
+  /** True when the entry is an import binding, not a declaration. */
+  isImport: boolean;
+}
+
+/**
+ * Parse `ast-grep outline --json=stream` (one JSON object per file, NDJSON)
+ * into a flat symbol list. Skips anonymous entries; duplicates by name keep
+ * the declaration over an import. Malformed lines are skipped.
+ */
+export function parseOutlineStream(raw: string): OutlineSymbol[] {
+  const byName = new Map<string, OutlineSymbol>();
+  for (const line of raw.split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed === "") continue;
+    let entry: {
+      path?: string;
+      items?: Array<{
+        name?: string;
+        symbolType?: string;
+        isImport?: boolean;
+        range?: { start?: { line?: number } };
+      }>;
+    };
+    try {
+      entry = JSON.parse(trimmed) as typeof entry;
+    } catch {
+      continue;
+    }
+    const file = entry.path ?? "(unknown)";
+    for (const item of entry.items ?? []) {
+      if (!item.name || !item.symbolType) continue;
+      const symbol: OutlineSymbol = {
+        name: item.name,
+        symbolType: item.symbolType,
+        file,
+        line: (item.range?.start?.line ?? 0) + 1,
+        isImport: item.isImport === true,
+      };
+      const existing = byName.get(symbol.name);
+      if (existing === undefined || (existing.isImport && !symbol.isImport)) {
+        byName.set(symbol.name, symbol);
+      }
+    }
+  }
+  return [...byName.values()];
+}
+
 /** Build the ast-grep run arguments for a rewrite. Pure, so tests can pin it. */
 export function buildSgArgs(
   pattern: string,
@@ -198,7 +252,7 @@ let sgVersion: string | null | undefined;
 export async function findSgVersion(): Promise<string | null> {
   if (sgVersion !== undefined) return sgVersion;
   try {
-    const { stdout } = await runSg(["--version"], process.cwd());
+    const { stdout } = await runAstGrep(["--version"], process.cwd());
     const match = /ast-grep\s+(\d+\.\d+\.\d+)/.exec(stdout);
     sgVersion = match ? match[1]! : "unknown";
   } catch {
@@ -213,7 +267,11 @@ interface SgResult {
   stderr: string;
 }
 
-function runSg(
+/**
+ * Run the ast-grep CLI with an args array (never a shell string). Exported
+ * for the symbol-completions extension and live probes.
+ */
+export function runAstGrep(
   args: string[],
   cwd: string,
   signal?: AbortSignal,
@@ -289,14 +347,18 @@ async function executeRewrite(
   const common = { lang: opts.lang, path: opts.path };
 
   // 1. Structured preview: match metadata via JSON (authoritative counts).
-  const preview = await runSg(buildSgArgs(p, r, { ...common, json: true }), opts.cwd, opts.signal);
+  const preview = await runAstGrep(
+    buildSgArgs(p, r, { ...common, json: true }),
+    opts.cwd,
+    opts.signal,
+  );
   if (preview.code !== 0 && preview.code !== 1) {
     throw new Error(`${BINARY} failed (exit ${preview.code}): ${preview.stderr.trim()}`);
   }
   const matches = parseSgJson(preview.stdout);
 
   // 2. Human-readable diff (unified), same pattern.
-  const diffRun = await runSg(buildSgArgs(p, r, common), opts.cwd, opts.signal);
+  const diffRun = await runAstGrep(buildSgArgs(p, r, common), opts.cwd, opts.signal);
   const diff = diffRun.code === 0 ? diffRun.stdout : "(no diff output)";
 
   if (matches.length === 0 || !opts.apply) {
@@ -332,7 +394,7 @@ async function executeRewrite(
   }
 
   if (cliFiles.length > 0) {
-    const applyRun = await runSg(
+    const applyRun = await runAstGrep(
       buildSgArgs(p, r, { lang: opts.lang, updateAll: true, path: cliFiles }),
       opts.cwd,
       opts.signal,
