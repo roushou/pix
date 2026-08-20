@@ -300,7 +300,7 @@ function formatToolCall(toolName: string, args: Record<string, unknown>, themeFg
 // Subagent execution
 // --------------------------------------------------------------------------- //
 
-interface SingleResult {
+export interface SingleResult {
   agent: string;
   agentSource: AgentSource;
   task: string;
@@ -354,10 +354,24 @@ function getResultOutput(result: SingleResult): string {
   return getFinalOutput(result.messages) || "(no output)";
 }
 
-export function truncateParallelOutput(output: string): string {
+/** Cap a subagent's final output for the main context; the full text stays in `details`. */
+export function truncateSubagentOutput(output: string): string {
   if (Buffer.byteLength(output, "utf8") <= PER_TASK_OUTPUT_CAP) return output;
   const truncated = truncateBytes(output, PER_TASK_OUTPUT_CAP);
   return `${truncated}\n\n[Output truncated: ${Buffer.byteLength(output, "utf8") - Buffer.byteLength(truncated, "utf8")} bytes omitted. Full output preserved in tool details.]`;
+}
+
+/** Render a single subagent's final content, capped for the main context. */
+export function formatSingleResult(result: SingleResult): string {
+  const failed = isFailedResult(result);
+  const output = truncateSubagentOutput(getResultOutput(result));
+  return failed ? `Agent ${result.stopReason || "failed"}: ${output}` : output;
+}
+
+/** Render a chain's final content — the last step's output, capped. */
+export function formatChainResult(results: SingleResult[]): string {
+  const last = results[results.length - 1];
+  return truncateSubagentOutput(getFinalOutput(last?.messages ?? []) || "(no output)");
 }
 
 type DisplayItem =
@@ -772,7 +786,7 @@ export default function (pi: ExtensionAPI) {
           results.push(result);
 
           if (isFailedResult(result)) {
-            const errorMsg = getResultOutput(result);
+            const errorMsg = truncateSubagentOutput(getResultOutput(result));
             return {
               content: [
                 {
@@ -786,9 +800,13 @@ export default function (pi: ExtensionAPI) {
           previousOutput = getFinalOutput(result.messages);
         }
 
-        const last = results[results.length - 1];
         return {
-          content: [{ type: "text", text: getFinalOutput(last?.messages ?? []) || "(no output)" }],
+          content: [
+            {
+              type: "text",
+              text: formatChainResult(results),
+            },
+          ],
           details: makeDetails("chain")(results),
         };
       }
@@ -862,7 +880,7 @@ export default function (pi: ExtensionAPI) {
 
         const successCount = results.filter((r) => !isFailedResult(r)).length;
         const summaries = results.map((r) => {
-          const output = truncateParallelOutput(getResultOutput(r));
+          const output = truncateSubagentOutput(getResultOutput(r));
           const status = isFailedResult(r)
             ? `failed${r.stopReason && r.stopReason !== "end" ? ` (${r.stopReason})` : ""}`
             : "completed";
@@ -892,13 +910,11 @@ export default function (pi: ExtensionAPI) {
           onUpdate,
           makeDetails("single"),
         );
-        const failed = isFailedResult(result);
-        const output = getResultOutput(result);
         return {
           content: [
             {
               type: "text",
-              text: failed ? `Agent ${result.stopReason || "failed"}: ${output}` : output,
+              text: formatSingleResult(result),
             },
           ],
           details: makeDetails("single")([result]),

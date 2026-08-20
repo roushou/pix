@@ -62,6 +62,13 @@ function countLines(text: string): number {
 }
 
 export default function (pi: ExtensionAPI) {
+  // Built-in tool sets are cached per cwd; drop them between sessions so a
+  // long-running process does not retain stale tool objects for every cwd it
+  // has ever touched.
+  pi.on("session_start", () => {
+    toolCache.clear();
+  });
+
   pi.registerTool({
     name: "read",
     label: "read",

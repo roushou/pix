@@ -1,12 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import type { Message } from "@earendil-works/pi-ai";
 import {
+  formatChainResult,
+  formatSingleResult,
   formatTokens,
   getFinalOutput,
   getPiInvocation,
   isFailedResult,
   parseToolList,
-  truncateParallelOutput,
+  truncateSubagentOutput,
+  type SingleResult,
 } from "../extensions/subagent.ts";
 
 const assistant = (text: string): Message =>
@@ -14,6 +17,20 @@ const assistant = (text: string): Message =>
     role: "assistant",
     content: [{ type: "text", text }],
   }) as Message;
+
+const makeSingleResult = (
+  messages: Message[] = [],
+  extra: Partial<SingleResult> = {},
+): SingleResult => ({
+  agent: "a",
+  agentSource: "bundled",
+  task: "t",
+  exitCode: 0,
+  messages,
+  stderr: "",
+  usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+  ...extra,
+});
 
 describe("parseToolList", () => {
   test("parses a comma-separated string", () => {
@@ -111,15 +128,15 @@ describe("isFailedResult", () => {
   });
 });
 
-describe("truncateParallelOutput", () => {
+describe("truncateSubagentOutput", () => {
   test("short output passes through unchanged", () => {
     const text = "short output";
-    expect(truncateParallelOutput(text)).toBe(text);
+    expect(truncateSubagentOutput(text)).toBe(text);
   });
 
   test("long output is truncated with a note", () => {
     const output = "a".repeat(60_000); // > 50 KiB
-    const out = truncateParallelOutput(output);
+    const out = truncateSubagentOutput(output);
     expect(out).toContain("[Output truncated:");
     expect(out).toContain("Full output preserved in tool details.");
     const body = out.split("\n\n")[0]!;
@@ -128,10 +145,49 @@ describe("truncateParallelOutput", () => {
 
   test("multibyte truncation never splits a code point", () => {
     const output = "é".repeat(40_000); // 80 KB in UTF-8
-    const out = truncateParallelOutput(output);
+    const out = truncateSubagentOutput(output);
     const body = out.split("\n\n")[0]!;
     expect(Buffer.byteLength(body, "utf8")).toBeLessThanOrEqual(50 * 1024);
     expect(body.length % 2).toBe(0); // whole é pairs only
+  });
+});
+
+describe("formatSingleResult", () => {
+  test("returns clean output verbatim", () => {
+    expect(formatSingleResult(makeSingleResult([assistant("hi")]))).toBe("hi");
+  });
+
+  test("prefixes a failure with the stop reason", () => {
+    expect(formatSingleResult(makeSingleResult([], { exitCode: 1, stopReason: "error" }))).toBe(
+      "Agent error: (no output)",
+    );
+  });
+
+  test("caps oversized output", () => {
+    const out = formatSingleResult(makeSingleResult([assistant("x".repeat(60_000))]));
+    expect(out).toContain("[Output truncated:");
+    expect(Buffer.byteLength(out.split("\n\n")[0]!, "utf8")).toBeLessThanOrEqual(50 * 1024);
+  });
+});
+
+describe("formatChainResult", () => {
+  test("empty chain yields a placeholder", () => {
+    expect(formatChainResult([])).toBe("(no output)");
+  });
+
+  test("returns the last step's output", () => {
+    expect(
+      formatChainResult([
+        makeSingleResult([assistant("first")]),
+        makeSingleResult([assistant("last")]),
+      ]),
+    ).toBe("last");
+  });
+
+  test("caps the last step's oversized output", () => {
+    const out = formatChainResult([makeSingleResult([assistant("y".repeat(60_000))])]);
+    expect(out).toContain("[Output truncated:");
+    expect(Buffer.byteLength(out.split("\n\n")[0]!, "utf8")).toBeLessThanOrEqual(50 * 1024);
   });
 });
 

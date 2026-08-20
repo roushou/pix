@@ -36,9 +36,12 @@ import { join } from "node:path";
 import { withFileMutationQueue, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { SnapshotStore } from "./shared/snapshots.ts";
+import { truncateOutput } from "./shared/text.ts";
 import { asText } from "./shared/tools.ts";
 
 const MAX_APPLY_MATCHES = 2000;
+const DIFF_MAX_LINES = 2000;
+const DIFF_MAX_BYTES = 50 * 1024;
 const BINARY = "ast-grep";
 
 // --------------------------------------------------------------------------- //
@@ -670,7 +673,13 @@ async function applyFileViaNapi(
   return { tags: tag === undefined ? {} : { [file]: tag }, failed: false };
 }
 
-function formatRewriteResult(
+/**
+ * Render a rewrite result for the model. The unified diff is capped at
+ * `DIFF_MAX_LINES` / `DIFF_MAX_BYTES` (head-first) so a repo-wide rename or
+ * rewrite cannot dump an unbounded diff into the conversation context; the
+ * match/file summary and any snapshot tags are preserved.
+ */
+export function formatRewriteResult(
   result: Awaited<ReturnType<typeof executeRewrite>>,
   pattern: string,
 ): string {
@@ -684,7 +693,11 @@ function formatRewriteResult(
   const tagLines = Object.entries(result.tags)
     .map(([file, tag]) => `  [${file}#${tag}]`)
     .join("\n");
-  return `${head}\n\n${diff.trimEnd()}\n${tagLines ? `\nFresh snapshot tags (for patch anchors):\n${tagLines}` : ""}`;
+  const diffText = truncateOutput(diff.trimEnd(), {
+    maxLines: DIFF_MAX_LINES,
+    maxBytes: DIFF_MAX_BYTES,
+  });
+  return `${head}\n\n${diffText}\n${tagLines ? `\nFresh snapshot tags (for patch anchors):\n${tagLines}` : ""}`;
 }
 
 // --------------------------------------------------------------------------- //

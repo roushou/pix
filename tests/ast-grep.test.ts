@@ -6,12 +6,14 @@ import {
   buildSgArgs,
   deriveSignatures,
   expandTemplate,
+  formatRewriteResult,
   keepOutermost,
   langFromSgName,
   memberNameFromText,
   normalizeMultiMetas,
   parseSgJson,
   type OutlineSymbol,
+  type SgMatch,
 } from "../extensions/ast-grep.ts";
 
 describe("normalizeMultiMetas", () => {
@@ -170,6 +172,15 @@ describe("langFromSgName", () => {
 
 const resolveTemplateMeta = (name: string, multi: boolean) => `${multi ? "<<" : "<"}${name}>`;
 const onlyKnownTemplateMeta = (name: string) => (name === "KNOWN" ? "x" : "");
+const makeMatch = (file = "a.ts"): SgMatch => ({
+  file,
+  language: "TypeScript",
+  startLine: 0,
+  startColumn: 0,
+  endLine: 0,
+  endColumn: 1,
+  text: "x",
+});
 
 describe("expandTemplate", () => {
   test("expands single and multi metas", () => {
@@ -255,6 +266,54 @@ describe("memberNameFromText", () => {
   test("computed names are rejected", () => {
     expect(memberNameFromText("[Symbol.iterator]()")).toBeNull();
     expect(memberNameFromText('["key"]()')).toBeNull();
+  });
+});
+
+describe("formatRewriteResult", () => {
+  test("reports no matches without a diff", () => {
+    const out = formatRewriteResult(
+      { outcome: { matches: [], diff: "" }, applied: false, tags: {} },
+      "const x",
+    );
+    expect(out).toContain("No matches for pattern: const x");
+    expect(out).not.toContain("Preview:");
+  });
+
+  test("keeps a small diff intact with the summary and tags", () => {
+    const out = formatRewriteResult(
+      {
+        outcome: { matches: [makeMatch()], diff: "@@ -1 +1 @@\n-const x\n+const y\n" },
+        applied: true,
+        tags: { "a.ts": "ABCD" },
+      },
+      "const x",
+    );
+    expect(out).toContain("Rewrote 1 match across 1 file");
+    expect(out).toContain("-const x");
+    expect(out).toContain("Fresh snapshot tags (for patch anchors):");
+    expect(out).toContain("[a.ts#ABCD]");
+  });
+
+  test("caps a diff longer than 2000 lines at the line limit", () => {
+    const diff = Array.from({ length: 3000 }, (_, i) => `line ${i}`).join("\n");
+    const out = formatRewriteResult(
+      { outcome: { matches: [makeMatch()], diff }, applied: false, tags: {} },
+      "p",
+    );
+    expect(out).toContain("[Truncated: showing first 2000 lines]");
+    expect(out.split("\n").filter((l) => l.startsWith("line "))).toHaveLength(2000);
+    expect(out).toContain("line 1999");
+    expect(out).not.toContain("line 2000");
+  });
+
+  test("caps a diff over 50KB at the byte limit", () => {
+    const diff = Array.from({ length: 1500 }, () => "x".repeat(80)).join("\n");
+    const out = formatRewriteResult(
+      { outcome: { matches: [makeMatch()], diff }, applied: false, tags: {} },
+      "p",
+    );
+    expect(out).toContain("[Truncated to 51200 bytes]");
+    expect(Buffer.byteLength(out, "utf8")).toBeLessThan(51200 + 1024);
   });
 });
 

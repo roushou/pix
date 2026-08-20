@@ -14,6 +14,13 @@
 import { StringEnum } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { truncateOutput } from "./shared/text.ts";
+
+const MAX_VALUES = 1000;
+const MAX_BINS = 64;
+const MAX_HEIGHT = 60;
+const MAX_WIDTH = 200;
+const MAX_DIAGRAM_ITEMS = 500;
 
 const BLOCKS = " ▁▂▃▄▅▆▇█";
 const BRAILLE_DOTS = [
@@ -35,6 +42,10 @@ const fmt = (n: number): string => {
   const r = Math.round(n * 100) / 100;
   return Number.isInteger(r) ? String(r) : String(r);
 };
+
+/** Clamp a numeric tool param to a safe range, falling back to `def`. */
+const clamp = (n: number | undefined, def: number, max: number): number =>
+  Math.min(Math.max(n ?? def, 1), max);
 
 // --------------------------------------------------------------------------- //
 // Bar / sparkline / histogram
@@ -410,30 +421,45 @@ export default function (pi: ExtensionAPI) {
     ],
     parameters: Type.Object({
       kind: StringEnum(["bar", "line", "scatter", "spark", "hist"] as const),
-      values: Type.Array(Type.Number(), { description: "Data values to plot" }),
+      values: Type.Array(Type.Number(), {
+        description: "Data values to plot",
+        maxItems: MAX_VALUES,
+      }),
       labels: Type.Optional(
-        Type.Array(Type.String(), { description: "Category labels (bar charts)" }),
+        Type.Array(Type.String(), {
+          description: "Category labels (bar charts)",
+          maxItems: MAX_VALUES,
+        }),
       ),
       x: Type.Optional(
-        Type.Array(Type.Number(), { description: "X values for scatter (defaults to 0..n-1)" }),
+        Type.Array(Type.Number(), {
+          description: "X values for scatter (defaults to 0..n-1)",
+          maxItems: MAX_VALUES,
+        }),
       ),
       horizontal: Type.Optional(Type.Boolean({ default: false })),
-      bins: Type.Optional(Type.Number({ description: "Number of bins for histogram" })),
-      height: Type.Optional(Type.Number({ description: "Plot height in rows" })),
-      width: Type.Optional(Type.Number({ description: "Plot width in columns" })),
+      bins: Type.Optional(
+        Type.Number({ description: "Number of bins for histogram", minimum: 1, maximum: MAX_BINS }),
+      ),
+      height: Type.Optional(
+        Type.Number({ description: "Plot height in rows", minimum: 1, maximum: MAX_HEIGHT }),
+      ),
+      width: Type.Optional(
+        Type.Number({ description: "Plot width in columns", minimum: 1, maximum: MAX_WIDTH }),
+      ),
     }),
     async execute(_toolCallId, params, _signal, _onUpdate) {
-      const vals = params.values ?? [];
-      const width = params.width ?? 60;
-      const height = params.height ?? 20;
+      const vals = (params.values ?? []).slice(0, MAX_VALUES);
+      const width = clamp(params.width, 60, MAX_WIDTH);
+      const height = clamp(params.height, 20, MAX_HEIGHT);
       let text: string;
       switch (params.kind) {
         case "bar": {
-          const labels = params.labels ?? vals.map((_, i) => String(i));
+          const labels = (params.labels ?? vals.map((_, i) => String(i))).slice(0, MAX_VALUES);
           text = barChart(vals, labels, {
             horizontal: params.horizontal,
-            height: params.height ?? 8,
-            width: params.width ?? 40,
+            height: clamp(params.height, 8, MAX_HEIGHT),
+            width: clamp(params.width, 40, MAX_WIDTH),
           });
           break;
         }
@@ -441,7 +467,7 @@ export default function (pi: ExtensionAPI) {
           text = lineChart(vals, width, height);
           break;
         case "scatter": {
-          const xs = params.x ?? vals.map((_, i) => i);
+          const xs = (params.x ?? vals.map((_, i) => i)).slice(0, MAX_VALUES);
           text = scatterPlot(xs, vals, width, height);
           break;
         }
@@ -449,12 +475,16 @@ export default function (pi: ExtensionAPI) {
           text = sparkline(vals, width);
           break;
         case "hist":
-          text = histogram(vals, params.bins ?? 10, params.height ?? 8);
+          text = histogram(
+            vals,
+            clamp(params.bins, 10, MAX_BINS),
+            clamp(params.height, 8, MAX_HEIGHT),
+          );
           break;
         default:
           text = "(unknown kind)";
       }
-      return { content: [{ type: "text", text }], details: {} };
+      return { content: [{ type: "text", text: truncateOutput(text) }], details: {} };
     },
   });
 
@@ -471,18 +501,24 @@ export default function (pi: ExtensionAPI) {
     parameters: Type.Object({
       kind: StringEnum(["flow", "tree"] as const),
       edges: Type.Optional(
-        Type.Array(Type.String(), { description: 'Directed edges like "App -> API"' }),
+        Type.Array(Type.String(), {
+          description: 'Directed edges like "App -> API"',
+          maxItems: MAX_DIAGRAM_ITEMS,
+        }),
       ),
       lines: Type.Optional(
-        Type.Array(Type.String(), { description: "Indented hierarchy lines (2 spaces per level)" }),
+        Type.Array(Type.String(), {
+          description: "Indented hierarchy lines (2 spaces per level)",
+          maxItems: MAX_DIAGRAM_ITEMS,
+        }),
       ),
     }),
     async execute(_toolCallId, params, _signal, _onUpdate) {
       const text =
         params.kind === "flow"
-          ? flowDiagram(parseEdges(params.edges ?? []))
-          : treeDiagram(params.lines ?? []);
-      return { content: [{ type: "text", text }], details: {} };
+          ? flowDiagram(parseEdges((params.edges ?? []).slice(0, MAX_DIAGRAM_ITEMS)))
+          : treeDiagram((params.lines ?? []).slice(0, MAX_DIAGRAM_ITEMS));
+      return { content: [{ type: "text", text: truncateOutput(text) }], details: {} };
     },
   });
 }
