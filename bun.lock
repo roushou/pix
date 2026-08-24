@@ -4,13 +4,13 @@
   "workspaces": {
     "": {
       "name": "@roushou/pix",
-      "dependencies": {
-        "@ast-grep/napi": "^0.45.1",
-      },
       "devDependencies": {
         "@types/bun": "latest",
         "oxfmt": "0.63.0",
         "oxlint": "1.78.0",
+      },
+      "optionalDependencies": {
+        "@ast-grep/napi": "^0.45.1",
       },
       "peerDependencies": {
         "@earendil-works/pi-agent-core": "^0.84.1",
